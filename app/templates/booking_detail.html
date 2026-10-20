@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Booking #{{ b.booking_id }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Booking #{{ b.booking_id }} <span class="badge b-{{ b.status }}" style="font-size:13px;vertical-align:middle">{{ b.status }}</span></h1>
+    <div class="sub">{{ b.customer }} · {{ b.vehicle }} ({{ b.reg_number }})</div></div>
+  <div><a class="btn sec" href="{{ url_for('customer_detail', customer_id=b.customer_id) }}">Customer history</a></div>
+</div>
+
+<div class="grid g3">
+  <div class="panel"><h2>Rental</h2>
+    <div class="kv">
+      <div>Customer</div><div><a href="{{ url_for('customer_detail', customer_id=b.customer_id) }}">{{ b.customer }}</a> · {{ b.phone }}</div>
+      <div>Vehicle</div><div>{{ b.vehicle }} · {{ b.category_name }}</div>
+      <div>Pickup</div><div>{{ b.start_date | dt }}<br><span class="muted">{{ b.pickup }}</span></div>
+      <div>Return due</div><div>{{ b.end_date | dt }}<br><span class="muted">{{ b.return_to }}{% if b.return_to != b.pickup %} (one-way){% endif %}</span></div>
+      <div>Returned</div><div>{{ b.actual_return_date | dt }}</div>
+      <div>Odometer</div><div>{{ b.start_odometer or '–' }} → {{ b.end_odometer or '–' }}{% if b.end_odometer %} ({{ b.end_odometer - b.start_odometer }} km){% endif %}</div>
+      <div>Handled by</div><div>{{ b.agent }}</div>
+      <div>Booked on</div><div>{{ b.booking_date | dt }}</div>
+    </div>
+  </div>
+
+  <div class="panel"><h2>Charges</h2>
+    <div class="kv">
+      <div>Rate</div><div>{{ b.daily_rate | money }}/day · late {{ b.late_fee_per_hr | money }}/h</div>
+      <div>Days <span class="mono small">fn_rental_days</span></div><div>{{ b.days }}</div>
+      <div>Rent <span class="mono small">fn_rental_amount</span></div><div>{{ b.rent | money }}</div>
+      <div>Late fee <span class="mono small">fn_late_fee</span></div><div>{{ b.late_fee | money }}
+        {% if b.late_fee_now %}<div class="small" style="color:var(--bad)">overdue — {{ b.late_fee_now | money }} if returned now</div>{% endif %}</div>
+      <div>Paid <span class="mono small">fn_total_paid</span></div><div>{{ b.paid | money }}</div>
+      <div>Balance <span class="mono small">fn_balance_due</span></div><div class="money-big">{{ b.balance | money }}</div>
+      <div>Security deposit</div><div class="muted">{{ b.security_deposit | money }} (refundable, collected at pickup)</div>
+    </div>
+  </div>
+
+  <div class="panel"><h2>Actions</h2>
+    {% if b.status == 'BOOKED' %}
+      <form method="post" action="{{ url_for('booking_pickup', booking_id=b.booking_id) }}">
+        <label>Start odometer (vehicle shows {{ b.vehicle_odometer }} km)</label>
+        <input type="number" name="start_odometer" value="{{ b.vehicle_odometer }}" required>
+        <div class="actions" style="margin-top:8px"><button class="btn ok">Record pickup</button>
+          <span class="dbcall">rental_record_pickup</span></div>
+      </form>
+      <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+      <form method="post" action="{{ url_for('booking_cancel', booking_id=b.booking_id) }}"
+            onsubmit="return confirm('Cancel booking #{{ b.booking_id }}?')">
+        <div class="small muted">Cancelling 24 h or more before pickup refunds the full advance; later refunds 50% (BR-06).</div>
+        <div class="actions" style="margin-top:8px"><button class="btn danger">Cancel booking</button>
+          <span class="dbcall">rental_cancel_booking</span></div>
+      </form>
+    {% elif b.status == 'ONGOING' %}
+      <form method="post" action="{{ url_for('booking_return', booking_id=b.booking_id) }}">
+        <div class="form-grid" style="grid-template-columns:1fr">
+          <div><label>End odometer (started at {{ b.start_odometer }})</label><input type="number" name="end_odometer" value="{{ b.start_odometer }}" required></div>
+          <div><label>Returned at</label><input type="datetime-local" name="return_date" value="{{ now_str }}"></div>
+          <div><label>Settle balance now by</label>
+            <select name="method"><option value="">Don't settle now</option>{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+        </div>
+        <div class="actions"><button class="btn ok">Record return</button><span class="dbcall">rental_record_return</span></div>
+      </form>
+    {% else %}
+      <div class="muted">This booking is {{ b.status | lower }}; no further pickup/return actions.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid g2">
+  <div class="panel table-wrap"><h2>Payments</h2>
+    {% if payments %}
+    <table>
+      <tr><th>ID</th><th>Type</th><th>Method</th><th>Date</th><th class="num">Amount</th></tr>
+      {% for p in payments %}
+      <tr><td>{{ p.payment_id }}</td><td><span class="badge b-{{ p.payment_type }}">{{ p.payment_type }}</span></td>
+          <td>{{ p.method }}</td><td>{{ p.payment_date | dt }}</td>
+          <td class="num">{{ '-' if p.payment_type == 'REFUND' }}{{ p.amount | money }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<div class="empty">No payments yet.</div>{% endif %}
+
+    <form method="post" action="{{ url_for('booking_payment', booking_id=b.booking_id) }}" style="margin-top:14px">
+      <div class="form-grid">
+        <div><label>Amount (₹)</label><input type="number" name="amount" min="1" step="0.01" value="{{ b.balance|int if b.balance > 0 else '' }}" required></div>
+        <div><label>Type</label><select name="payment_type">
+          {% for t in ['ADVANCE','FINAL','LATE_FEE','REFUND'] %}<option {{ 'selected' if (t == 'FINAL' and b.status != 'BOOKED') or (t == 'ADVANCE' and b.status == 'BOOKED') }}>{{ t }}</option>{% endfor %}</select></div>
+        <div><label>Method</label><select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="actions"><button class="btn">Record payment</button><span class="dbcall">rental_add_payment</span><span class="dbcall">trg_payment_before_insert</span></div>
+    </form>
+  </div>
+
+  <div class="panel table-wrap"><h2>Audit trail <span class="muted small">(trg_booking_after_insert / _after_update)</span></h2>
+    <table>
+      <tr><th>#</th><th>Action</th><th>Change</th><th>By</th><th>When</th></tr>
+      {% for a in audit %}
+      <tr><td>{{ a.audit_id }}</td><td>{{ a.action }}</td>
+          <td>{% if a.old_status %}<span class="badge b-{{ a.old_status }}">{{ a.old_status }}</span> → {% endif %}<span class="badge b-{{ a.new_status }}">{{ a.new_status }}</span></td>
+          <td class="mono">{{ a.changed_by }}</td><td>{{ a.changed_on | dt }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Dashboard</h1><div class="sub">Live view of the fleet, rentals and money across all branches</div></div>
+  <div><span class="dbcall">fn_balance_due</span><span class="dbcall">fn_late_fee</span><span class="dbcall">v_booking_summary</span></div>
+</div>
+
+<div class="grid g4" style="margin-bottom:18px">
+  <div class="stat"><div class="k">Vehicles available</div><div class="v">{{ fleet.get('AVAILABLE', 0) }}</div>
+    <div class="s">{{ fleet.get('RENTED', 0) }} rented · {{ fleet.get('MAINTENANCE', 0) }} in maintenance · {{ fleet.get('RETIRED', 0) }} retired</div></div>
+  <div class="stat"><div class="k">Active rentals</div><div class="v">{{ bookings.get('ONGOING', 0) }}</div>
+    <div class="s">{{ bookings.get('BOOKED', 0) }} upcoming bookings</div></div>
+  <div class="stat"><div class="k">Revenue this month</div><div class="v">{{ revenue | money }}</div>
+    <div class="s">successful payments less refunds</div></div>
+  <div class="stat"><div class="k">Outstanding dues</div><div class="v">{{ dues | money }}</div>
+    <div class="s">ongoing + completed rentals</div></div>
+</div>
+
+<div class="grid g2">
+  <div class="panel">
+    <h2>Overdue returns</h2>
+    {% if overdue %}
+    <table>
+      <tr><th>Booking</th><th>Customer</th><th>Vehicle</th><th>Due back</th><th class="num">Late fee so far</th></tr>
+      {% for r in overdue %}
+      <tr><td><a href="{{ url_for('booking_detail', booking_id=r.booking_id) }}">#{{ r.booking_id }}</a></td>
+          <td>{{ r.name }}</td><td>{{ r.vehicle }}<div class="small muted">{{ r.reg_number }}</div></td>
+          <td>{{ r.end_date | dt }}<div class="small" style="color:var(--bad)">{{ r.hours_late }} h late</div></td>
+          <td class="num">{{ r.late_fee_now | money }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<div class="empty">No vehicles are overdue.</div>{% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Next 7 days</h2>
+    {% if upcoming %}
+    <table>
+      <tr><th>Booking</th><th>Event</th><th>Customer</th><th>Vehicle</th><th>When</th></tr>
+      {% for r in upcoming %}
+      <tr><td><a href="{{ url_for('booking_detail', booking_id=r.booking_id) }}">#{{ r.booking_id }}</a></td>
+          <td>{% if r.status == 'BOOKED' %}<span class="badge b-BOOKED">Pickup</span>{% else %}<span class="badge b-ONGOING">Return</span>{% endif %}</td>
+          <td>{{ r.name }}</td><td>{{ r.vehicle }}</td>
+          <td>{{ (r.start_date if r.status == 'BOOKED' else r.end_date) | dt }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<div class="empty">Nothing scheduled.</div>{% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Recent booking activity <span class="muted small">(written by triggers trg_booking_after_insert / _after_update)</span></h2>
+  <table>
+    <tr><th>Audit #</th><th>Booking</th><th>Action</th><th>Status change</th><th>By</th><th>When</th></tr>
+    {% for a in audit %}
+    <tr><td>{{ a.audit_id }}</td>
+        <td><a href="{{ url_for('booking_detail', booking_id=a.booking_id) }}">#{{ a.booking_id }}</a></td>
+        <td>{{ a.action }}</td>
+        <td>{% if a.old_status %}<span class="badge b-{{ a.old_status }}">{{ a.old_status }}</span> → {% endif %}
+            {% if a.new_status %}<span class="badge b-{{ a.new_status }}">{{ a.new_status }}</span>{% endif %}</td>
+        <td class="mono">{{ a.changed_by }}</td><td>{{ a.changed_on | dt }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

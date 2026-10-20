@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Maintenance{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Maintenance</h1><div class="sub">FR-09 · vehicles with an open job are blocked from booking automatically</div></div>
+  <div><span class="dbcall">fleet_schedule_maintenance</span><span class="dbcall">fleet_update_maintenance</span><span class="dbcall">trg_maint_after_insert</span></div>
+</div>
+
+<div class="grid g2">
+  <div class="panel">
+    <h2>Schedule a job</h2>
+    <form method="post">
+      <div class="form-grid">
+        <div style="grid-column: span 2"><label>Vehicle</label>
+          <select name="vehicle_id" required>{% for v in vehicles %}<option value="{{ v.vehicle_id }}">{{ v.name }} · {{ v.reg_number }} [{{ v.status }}]</option>{% endfor %}</select></div>
+        <div><label>Type</label><select name="service_type">{% for t in service_types %}<option>{{ t }}</option>{% endfor %}</select></div>
+        <div><label>Service date</label><input type="date" name="service_date" value="{{ today }}"></div>
+        <div style="grid-column: span 2"><label>Description</label><input name="description" maxlength="200"></div>
+      </div>
+      <div class="actions"><button class="btn">Schedule</button>
+        <span class="small muted">A RENTED or RETIRED vehicle is refused by trigger trg_maint_before_insert.</span></div>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Periodic service check</h2>
+    <p class="muted">Runs a cursor over every available vehicle and schedules a GENERAL service for any vehicle
+      not serviced in the last 180 days (skipping vehicles booked in the next 3 days).</p>
+    <form method="post" action="{{ url_for('maintenance_auto') }}">
+      <button class="btn sec">Run auto-schedule</button> <span class="dbcall">fleet_auto_schedule_service</span>
+    </form>
+  </div>
+</div>
+
+<div class="panel table-wrap">
+  <table>
+    <tr><th>Job</th><th>Vehicle</th><th>Branch</th><th>Date</th><th>Type</th><th>Description</th><th class="num">Cost</th><th>Status</th><th>Update</th></tr>
+    {% for m in rows %}
+    <tr><td>{{ m.maint_id }}</td>
+        <td>{{ m.vehicle }}<div class="small muted">{{ m.reg_number }} · <span class="badge b-{{ m.vehicle_status }}">{{ m.vehicle_status }}</span></div></td>
+        <td>{{ m.branch_name }}</td><td>{{ m.service_date | d }}</td><td>{{ m.service_type }}</td>
+        <td>{{ m.description or '–' }}</td><td class="num">{{ m.cost | money }}</td>
+        <td><span class="badge b-{{ m.maint_status }}">{{ m.maint_status }}</span></td>
+        <td>{% if m.maint_status != 'DONE' %}
+          <form class="inline" method="post" action="{{ url_for('maintenance_update', maint_id=m.maint_id) }}" style="display:flex;gap:6px">
+            <select name="status" style="width:auto">{% for s in ['IN_PROGRESS','DONE'] %}<option>{{ s }}</option>{% endfor %}</select>
+            <input name="cost" type="number" min="0" placeholder="Cost" style="width:90px">
+            <button class="btn sm">Save</button></form>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

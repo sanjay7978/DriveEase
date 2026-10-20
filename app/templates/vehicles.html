@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Vehicles{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Fleet register</h1><div class="sub">FR-02 · add, view and retire vehicles</div></div>
+  <div><span class="dbcall">sp_add_vehicle</span><span class="dbcall">sp_retire_vehicle</span></div>
+</div>
+
+<div class="panel">
+  <form class="filters" method="get">
+    <div><label>Status</label>
+      <select name="status"><option value="">All</option>
+        {% for s in ['AVAILABLE','RENTED','MAINTENANCE','RETIRED'] %}<option {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}
+      </select></div>
+    <div><label>Branch</label>
+      <select name="branch"><option value="">All branches</option>
+        {% for b in branches %}<option value="{{ b.branch_id }}" {{ 'selected' if branch|string == b.branch_id|string }}>{{ b.branch_name }}</option>{% endfor %}
+      </select></div>
+    <button class="btn sec">Filter</button>
+  </form>
+</div>
+
+<div class="panel table-wrap">
+  <table>
+    <tr><th>ID</th><th>Reg. no.</th><th>Vehicle</th><th>Category</th><th>Fuel / gear</th><th class="num">Odometer</th>
+        <th>Branch</th><th>Status</th><th></th></tr>
+    {% for v in rows %}
+    <tr>
+      <td>{{ v.vehicle_id }}</td><td class="mono">{{ v.reg_number }}</td>
+      <td>{{ v.brand }} {{ v.model }}<div class="small muted">{{ v.mfg_year }}</div></td>
+      <td>{{ v.category_name }}<div class="small muted">{{ v.daily_rate | money }}/day</div></td>
+      <td>{{ v.fuel_type }}<div class="small muted">{{ v.transmission }}</div></td>
+      <td class="num">{{ '{:,}'.format(v.odometer) }} km</td>
+      <td>{{ v.branch_name }}</td>
+      <td><span class="badge b-{{ v.status }}">{{ v.status }}</span>
+        {% if v.open_bookings %}<div class="small muted">{{ v.open_bookings }} open booking(s)</div>{% endif %}</td>
+      <td>{% if v.status != 'RETIRED' %}
+        <form class="inline" method="post" action="{{ url_for('retire_vehicle', vehicle_id=v.vehicle_id) }}"
+              onsubmit="return confirm('Retire vehicle {{ v.reg_number }}?')">
+          <button class="btn sm sec">Retire</button></form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="panel">
+  <h2>Add a vehicle</h2>
+  <form method="post">
+    <div class="form-grid">
+      <div><label>Registration no.</label><input name="reg_number" required maxlength="12" placeholder="TN23AB0001"></div>
+      <div><label>Brand</label><input name="brand" required></div>
+      <div><label>Model</label><input name="model" required></div>
+      <div><label>Mfg. year</label><input name="mfg_year" type="number" min="2010" max="2030" value="2025"></div>
+      <div><label>Fuel</label><select name="fuel_type">{% for f in fuel_types %}<option>{{ f }}</option>{% endfor %}</select></div>
+      <div><label>Transmission</label><select name="transmission"><option>MANUAL</option><option>AUTOMATIC</option></select></div>
+      <div><label>Odometer (km)</label><input name="odometer" type="number" min="0" value="0"></div>
+      <div><label>Category</label><select name="category_id">{% for c in categories %}<option value="{{ c.category_id }}">{{ c.category_name }} ({{ c.daily_rate | money }}/day)</option>{% endfor %}</select></div>
+      <div><label>Home branch</label><select name="branch_id">{% for b in branches %}<option value="{{ b.branch_id }}">{{ b.branch_name }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="actions"><button class="btn">Add vehicle</button></div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}New booking{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>New booking</h1><div class="sub">FR-04 · eligibility and availability are checked by the database</div></div>
+  <div><span class="dbcall">rental_create_booking</span><span class="dbcall">trg_booking_before_insert</span></div>
+</div>
+
+<div class="panel">
+  <form method="post">
+    <div class="form-grid">
+      <div style="grid-column: span 2"><label>Customer</label>
+        <select name="customer_id" required><option value="">Choose…</option>
+          {% for c in customers %}<option value="{{ c.customer_id }}" {{ 'selected' if form.customer_id == c.customer_id|string }}>{{ c.name }} · {{ c.phone }} (#{{ c.customer_id }})</option>{% endfor %}
+        </select></div>
+      <div style="grid-column: span 2"><label>Vehicle (picked up from its current branch)</label>
+        <select name="vehicle_id" required><option value="">Choose…</option>
+          {% for v in vehicles %}<option value="{{ v.vehicle_id }}" {{ 'selected' if form.vehicle_id == v.vehicle_id|string }}>{{ v.name }} · {{ v.reg_number }} · {{ v.category_name }} {{ v.daily_rate | money }}/day · {{ v.branch_name }}{% if v.status != 'AVAILABLE' %} [{{ v.status }}]{% endif %}</option>{% endfor %}
+        </select></div>
+      <div><label>Pickup date &amp; time</label><input type="datetime-local" name="start" value="{{ form.start }}" required></div>
+      <div><label>Return date &amp; time</label><input type="datetime-local" name="end" value="{{ form.end }}" required></div>
+      <div><label>Return branch (one-way)</label>
+        <select name="return_branch_id"><option value="">Same as pickup</option>
+          {% for b in branches %}<option value="{{ b.branch_id }}">{{ b.branch_name }}</option>{% endfor %}</select></div>
+      <div><label>Handled by</label>
+        <select name="emp_id" required>
+          {% for e in staff %}<option value="{{ e.emp_id }}" {{ 'selected' if form.emp_id == e.emp_id|string }}>{{ e.name }} · {{ e.role }} · {{ e.branch_name }}</option>{% endfor %}
+        </select></div>
+      <div><label>Advance amount (₹)</label><input type="number" name="advance" min="0" step="1" value="1000"></div>
+      <div><label>Advance paid by</label>
+        <select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="actions"><button class="btn">Create booking</button>
+      <span class="small muted">Rules enforced in MySQL: age ≥ 21 and licence valid to end date (BR-01), no overlapping booking (BR-02),
+      no vehicle in maintenance or retired (BR-03), only an AGENT or MANAGER may book.</span></div>
+  </form>
+</div>
+{% endblock %}

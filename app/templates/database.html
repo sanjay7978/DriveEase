@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Database objects{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Database objects</h1><div class="sub">Everything in the MySQL database <span class="mono">driveease</span>, read live from INFORMATION_SCHEMA</div></div>
+</div>
+
+<div class="grid g2">
+  <div class="panel table-wrap">
+    <table>
+      <tr><th>Type</th><th>Name</th><th></th></tr>
+      {% for o in objects %}
+      <tr><td class="small">{{ 'TABLE' if o.object_type == 'BASE TABLE' else o.object_type }}</td>
+          <td class="mono">{{ o.object_name }}{% if o.detail %}<div class="small muted">{{ o.detail }}</div>{% endif %}</td>
+          <td><a href="{{ url_for('database', name=o.object_name, type=o.object_type) }}">source</a></td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="panel">
+    {% if source %}
+      <h2 class="mono">{{ 'TABLE' if otype == 'BASE TABLE' else otype }} {{ name }}</h2>
+      <pre class="src">{{ source }}</pre>
+    {% else %}
+      <h2>Source viewer</h2>
+      <p class="muted">Pick a table, view, function, procedure or trigger on the left to see its SQL exactly as stored in MySQL.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

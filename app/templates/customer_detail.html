@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>{{ c.name }}</h1><div class="sub">Customer {{ c.customer_id }} · FR-12 rental and payment history</div></div>
+  <div><span class="dbcall">rental_customer_history (result set)</span>
+       <a class="btn" href="{{ url_for('booking_new', customer_id=c.customer_id) }}">New booking</a></div>
+</div>
+
+<div class="grid g2">
+  <div class="panel"><h2>Details</h2>
+    <div class="kv">
+      <div>Phone</div><div>{{ c.phone }}</div>
+      <div>Email</div><div>{{ c.email or '–' }}</div>
+      <div>Date of birth</div><div>{{ c.dob | d }} (age {{ c.age }})</div>
+      <div>Licence no.</div><div class="mono">{{ c.license_no }}</div>
+      <div>Licence expiry</div><div>{{ c.license_expiry | d }}</div>
+      <div>Address</div><div>{{ c.address or '–' }}</div>
+      <div>Registered on</div><div>{{ c.registered_on | d }}</div>
+    </div>
+  </div>
+  <div class="panel"><h2>Totals</h2>
+    {% set spent = history | sum(attribute='paid') %}
+    {% set owed = history | sum(attribute='balance') %}
+    <div class="kv">
+      <div>Bookings</div><div class="money-big">{{ history | length }}</div>
+      <div>Total paid</div><div class="money-big">{{ spent | money }}</div>
+      <div>Balance due</div><div class="money-big" style="color: {{ 'var(--bad)' if owed > 0 else 'inherit' }}">{{ owed | money }}</div>
+    </div>
+    {% if c.age < 21 %}<p class="flash error" style="margin-top:14px">Under 21: the database will refuse bookings for this customer (BR-01).</p>{% endif %}
+  </div>
+</div>
+
+<div class="panel table-wrap"><h2>Bookings</h2>
+  {% if history %}
+  <table>
+    <tr><th>Booking</th><th>Status</th><th>Vehicle</th><th>Period</th><th>Pickup → return</th>
+        <th class="num">Rent</th><th class="num">Late fee</th><th class="num">Paid</th><th class="num">Balance</th></tr>
+    {% for h in history %}
+    <tr><td><a href="{{ url_for('booking_detail', booking_id=h.booking_id) }}">#{{ h.booking_id }}</a></td>
+        <td><span class="badge b-{{ h.status }}">{{ h.status }}</span></td>
+        <td>{{ h.vehicle }}<div class="small muted">{{ h.reg_number }}</div></td>
+        <td>{{ h.start_date | dt }}<div class="small muted">to {{ h.end_date | dt }}</div></td>
+        <td>{{ h.pickup_branch }}{% if h.return_branch != h.pickup_branch %}<div class="small muted">→ {{ h.return_branch }}</div>{% endif %}</td>
+        <td class="num">{{ h.rent | money }}</td><td class="num">{{ h.late_fee | money }}</td>
+        <td class="num">{{ h.paid | money }}</td><td class="num"><b>{{ h.balance | money }}</b></td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<div class="empty">No bookings yet.</div>{% endif %}
+</div>
+
+<div class="panel table-wrap"><h2>Payments</h2>
+  {% if payments %}
+  <table>
+    <tr><th>Payment</th><th>Booking</th><th>Type</th><th>Method</th><th>Date</th><th>Status</th><th class="num">Amount</th></tr>
+    {% for p in payments %}
+    <tr><td>{{ p.payment_id }}</td><td>#{{ p.booking_id }}</td><td><span class="badge b-{{ p.payment_type }}">{{ p.payment_type }}</span></td>
+        <td>{{ p.method }}</td><td>{{ p.payment_date | dt }}</td><td><span class="badge b-{{ p.txn_status }}">{{ p.txn_status }}</span></td>
+        <td class="num">{{ '-' if p.payment_type == 'REFUND' }}{{ p.amount | money }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<div class="empty">No payments yet.</div>{% endif %}
+</div>
+{% endblock %}

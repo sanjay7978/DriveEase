@@ -1,0 +1,407 @@
+
+--------------
+-- =====================================================================
+--------------
+
+--------------
+-- DriveEase (MySQL 8) - 08_demo_queries.sql
+--------------
+
+--------------
+-- Run these one at a time in VS Code (select a statement, then run it)
+--------------
+
+--------------
+-- to show every database object working - use for output screenshots.
+--------------
+
+--------------
+-- =====================================================================
+--------------
+
+--------------
+USE driveease
+--------------
+
+--------------
+-- 1. AUTOMATED TEST CASES (28 tests, all changes rolled back)
+--------------
+
+--------------
+CALL run_all_tests()
+--------------
+
++-------+--------+-----------+---------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------+
+| tc    | result | area      | test_case                                                                                               | actual_output                                                                                    |
++-------+--------+-----------+---------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------+
+| TC01  | PASS   | Function  | fn_customer_age(1001) derives age from DOB 10-Apr-1996                                                  | Returned 30 (expected 30)                                                                        |
+| TC02  | PASS   | Function  | fn_is_vehicle_available: vehicle in MAINTENANCE -> N, free vehicle -> Y                                 | Returned N/Y                                                                                     |
+| TC03  | PASS   | Procedure | sp_register_customer registers a valid customer (FR-01)                                                 | Customer 1013 created                                                                            |
+| TC04  | PASS   | Procedure | sp_register_customer rejects a duplicate licence number                                                 | Rejected with error 20020: A customer with this phone, email or licence number already exists    |
+| TC05  | PASS   | Procedure | sp_add_vehicle adds a vehicle with default status AVAILABLE (FR-02)                                     | Vehicle 126 status AVAILABLE                                                                     |
+| TC06  | PASS   | Procedure | sp_retire_vehicle refuses a vehicle that has an open booking                                            | Rejected with error 20024: Vehicle 125 has 1 open booking(s) and cannot be retired               |
+| TC07  | PASS   | Module    | rental_create_booking: booking + advance in one transaction; rent = 3 days x Rs.1500 (BR-04)            | Booking 5033, advance rows 1, fn_rental_days 3, fn_rental_amount 4500.00                         |
+| TC08  | PASS   | Module    | rental_search_available logic (view + fn_is_vehicle_available) hides the vehicle booked in TC07 (FR-03) | 6 hatchbacks free; vehicle 121 listed: NO                                                        |
+| TC09  | PASS   | Module    | rental_record_pickup: booking -> ONGOING, vehicle -> RENTED (FR-05)                                     | Booking 5034 / vehicle 124 = ONGOING/RENTED                                                      |
+| TC10  | PASS   | Module    | rental_record_return 3 h late, one-way to branch 2: late fee 3 x Rs.100, settled (FR-06, BR-05, BR-07)  | fn_late_fee = 300.00, balance 0.00, vehicle AVAILABLE/branch 2/odo 1150                          |
+| TC11  | PASS   | Module    | rental_cancel_booking 20 days before pickup refunds 100% of advance (BR-06)                             | Advance 1200, refund 1200.00, status CANCELLED, net paid 0.00                                    |
+| TC12  | PASS   | Module    | rental_cancel_booking 5 hours before pickup refunds only 50% (BR-06)                                    | Advance 2000, refund 1000.00                                                                     |
+| TC13  | PASS   | Module    | rental_create_booking refuses a booking made by a MECHANIC                                              | Rejected with error 20033: Only an AGENT or MANAGER can create bookings (employee is MECHANIC)   |
+| TC14  | PASS   | Trigger   | trg_booking_before_insert blocks a 19-year-old customer (BR-01)                                         | Rejected with error 20001: Customer must be at least 21 years old on the pickup date (age 19)    |
+| TC15  | PASS   | Trigger   | trg_booking_before_insert blocks a licence that expires during the rental (BR-01)                       | Rejected with error 20002: Driving licence expires on 25-Oct-2026, before the booking ends       |
+| TC16  | PASS   | Trigger   | trg_booking_before_insert blocks a double booking of the TC07 vehicle (BR-02)                           | Rejected with error 20004: Vehicle is already booked for these dates (clashes with booking 5033) |
+| TC17  | PASS   | Trigger   | trg_booking_before_insert blocks a vehicle under MAINTENANCE (BR-03)                                    | Rejected with error 20003: Vehicle 122 is MAINTENANCE and cannot be booked                       |
+| TC18  | PASS   | Trigger   | trg_vehicle_before_update stops an odometer from going backwards (BR-08)                                | Rejected with error 20006: Odometer cannot decrease (100 -> 50)                                  |
+| TC19  | PASS   | Trigger   | trg_booking_before_update rejects COMPLETED -> BOOKED                                                   | Rejected with error 20005: Invalid booking status change COMPLETED -> BOOKED                     |
+| TC20  | PASS   | Trigger   | trg_payment_before_insert rejects a FINAL payment on a cancelled booking                                | Rejected with error 20008: Booking 5023 is cancelled; only a REFUND can be recorded              |
+| TC21  | PASS   | Trigger   | trg_booking_after_insert/update log every status change of the TC09/TC10 booking                        | 3 audit rows: ->BOOKED, BOOKED>ONGOING, ONGOING>COMPLETED                                        |
+| TC22  | PASS   | Trigger   | trg_maint_after_insert/update: job opened -> vehicle MAINTENANCE, job DONE -> AVAILABLE (FR-09)         | Vehicle 123 status MAINTENANCE -> AVAILABLE                                                      |
+| TC23  | PASS   | Trigger   | trg_maint_before_insert blocks maintenance on a RENTED vehicle                                          | Rejected with error 20007: Vehicle 125 is RENTED and cannot be sent for maintenance              |
+| TC24  | PASS   | Module    | rental_record_return rejects end odometer lower than start (BR-08)                                      | Rejected with error 20051: End odometer (400) cannot be lower than start odometer (500)          |
+| TC25  | PASS   | Trigger   | trg_customer_before_insert rejects registration with an expired licence                                 | Rejected with error 20013: Driving licence has already expired                                   |
+| TC26  | PASS   | Cursor    | fleet_auto_schedule_service (explicit cursor OPEN/FETCH/CLOSE) schedules overdue services               | 7 service job(s) created for vehicles not serviced in 180 days                                   |
+| TC27  | PASS   | Cursor    | Cursor over pending dues (report_pending_dues) lists the unpaid test rental: 2 days x Rs.1500 (FR-11)   | 10 booking(s) with dues; booking 5032 owes Rs.3000.00                                            |
+| TC28  | PASS   | Cursor    | rental_customer_history returns every booking of customer 1001 (FR-12)                                  | 5 rows returned, 5 bookings in table                                                             |
+| TOTAL | PASS   |           | 28 passed, 0 failed, 28 total                                                                           | All test changes rolled back                                                                     |
++-------+--------+-----------+---------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------+
+--------------
+-- 2. FUNCTIONS used inside SQL
+--------------
+
+--------------
+SELECT customer_id, name, dob, fn_customer_age(customer_id, NULL) AS age
+  FROM customer ORDER BY customer_id
+--------------
+
++-------------+-------------------+------------+------+
+| customer_id | name              | dob        | age  |
++-------------+-------------------+------------+------+
+|        1001 | Aditya Verma      | 1996-04-10 |   30 |
+|        1002 | Meera Iyer        | 1994-08-22 |   32 |
+|        1003 | Rahul Nair        | 1990-01-15 |   36 |
+|        1004 | Fathima Begum     | 1992-11-30 |   33 |
+|        1005 | Sandeep Reddy     | 1988-06-05 |   38 |
+|        1006 | Kavya Hegde       | 1997-02-18 |   29 |
+|        1007 | Mohammed Irfan    | 1999-09-09 |   27 |
+|        1008 | Ananya Krishnan   | 1995-03-03 |   31 |
+|        1009 | Vignesh Subramani | 2000-12-12 |   25 |
+|        1010 | Pooja Agarwal     | 1993-07-07 |   33 |
+|        1011 | Arjun Das         | 2007-07-20 |   19 |
+|        1012 | Suresh Pillai     | 1980-05-20 |   46 |
++-------------+-------------------+------------+------+
+--------------
+SELECT booking_id, status,
+       fn_rental_days(booking_id)       AS days,
+       fn_rental_amount(booking_id)     AS rent,
+       fn_late_fee(booking_id, NULL)    AS late_fee,
+       fn_total_paid(booking_id)        AS paid,
+       fn_balance_due(booking_id)       AS balance
+  FROM booking ORDER BY booking_id
+--------------
+
++------------+-----------+------+----------+----------+----------+---------+
+| booking_id | status    | days | rent     | late_fee | paid     | balance |
++------------+-----------+------+----------+----------+----------+---------+
+|       5001 | COMPLETED |    3 |  4500.00 |     0.00 |  4500.00 |    0.00 |
+|       5002 | COMPLETED |    5 | 16000.00 |     0.00 | 16000.00 |    0.00 |
+|       5003 | COMPLETED |    2 | 13000.00 |  1200.00 | 14200.00 |    0.00 |
+|       5004 | COMPLETED |    4 | 12800.00 |     0.00 | 12800.00 |    0.00 |
+|       5005 | COMPLETED |    2 |  4400.00 |     0.00 |  4400.00 |    0.00 |
+|       5006 | COMPLETED |    2 |  4400.00 |     0.00 |  4400.00 |    0.00 |
+|       5007 | COMPLETED |    3 |  6600.00 |   750.00 |  7350.00 |    0.00 |
+|       5008 | COMPLETED |    6 |  3000.00 |     0.00 |  3000.00 |    0.00 |
+|       5009 | COMPLETED |    2 | 13000.00 |     0.00 | 13000.00 |    0.00 |
+|       5010 | COMPLETED |    4 |  3200.00 |   120.00 |  3320.00 |    0.00 |
+|       5011 | COMPLETED |    3 |  6600.00 |     0.00 |  6600.00 |    0.00 |
+|       5012 | COMPLETED |    2 |  3000.00 |     0.00 |  3000.00 |    0.00 |
+|       5013 | COMPLETED |    5 | 16000.00 |     0.00 | 16000.00 |    0.00 |
+|       5014 | COMPLETED |    7 |  5600.00 |     0.00 |  5600.00 |    0.00 |
+|       5015 | COMPLETED |    3 |  9600.00 |   800.00 | 10400.00 |    0.00 |
+|       5016 | COMPLETED |    5 |  2500.00 |     0.00 |  2500.00 |    0.00 |
+|       5017 | COMPLETED |    2 |  6400.00 |     0.00 |  6400.00 |    0.00 |
+|       5018 | COMPLETED |    3 |  4500.00 |     0.00 |  4500.00 |    0.00 |
+|       5019 | COMPLETED |    4 |  6000.00 |     0.00 |  6000.00 |    0.00 |
+|       5020 | COMPLETED |    3 |  9600.00 |     0.00 |  9600.00 |    0.00 |
+|       5021 | COMPLETED |    2 |  6400.00 |  1200.00 |  6400.00 | 1200.00 |
+|       5022 | COMPLETED |    2 |  3000.00 |     0.00 |  3000.00 |    0.00 |
+|       5023 | CANCELLED |    2 |  4400.00 |     0.00 |     0.00 |    0.00 |
+|       5024 | CANCELLED |    3 |  4500.00 |     0.00 |   700.00 |    0.00 |
+|       5025 | ONGOING   |    4 | 12800.00 |     0.00 |  4000.00 | 8800.00 |
+|       5026 | ONGOING   |    2 |  4400.00 |     0.00 |  1500.00 | 2900.00 |
+|       5027 | ONGOING   |    2 | 13000.00 |     0.00 |  4000.00 | 9000.00 |
+|       5028 | BOOKED    |    3 |  4500.00 |     0.00 |  1500.00 | 3000.00 |
+|       5029 | BOOKED    |    2 | 13000.00 |     0.00 |  4000.00 | 9000.00 |
+|       5030 | BOOKED    |    3 |  9600.00 |     0.00 |  3000.00 | 6600.00 |
+|       5031 | BOOKED    |    2 |  4400.00 |     0.00 |     0.00 | 4400.00 |
++------------+-----------+------+----------+----------+----------+---------+
+--------------
+-- 3. EXPLICIT / NESTED CURSORS
+--------------
+
+--------------
+CALL rental_print_customer_history(1001)
+--------------
+
++------------------------------------------------------------------------------+
+| customer_history                                                             |
++------------------------------------------------------------------------------+
+| Rental history of Aditya Verma (customer 1001, age 30)                       |
+| Booking 5001  COMPLETED 23-May-26 -> 26-May-26  Maruti Swift (TN23AB1234)    |
+|     rent 4500.00, late fee 0.00, paid 4500.00, balance 0.00                  |
+|       - payment 90001 ADVANCE  UPI        1400.00                            |
+|       - payment 90002 FINAL    UPI        3100.00                            |
+| Booking 5006  COMPLETED 02-Jul-26 -> 04-Jul-26  Honda City (TN23EF4321)      |
+|     rent 4400.00, late fee 0.00, paid 4400.00, balance 0.00                  |
+|       - payment 90012 ADVANCE  UPI        1300.00                            |
+|       - payment 90013 FINAL    UPI        3100.00                            |
+| Booking 5015  COMPLETED 08-Sep-26 -> 11-Sep-26  Mahindra XUV700 (TN23GH8765) |
+|     rent 9600.00, late fee 800.00, paid 10400.00, balance 0.00               |
+|       - payment 90032 ADVANCE  CARD       2900.00                            |
+|       - payment 90033 FINAL    CARD       6700.00                            |
+|       - payment 90034 LATE_FEE CARD       800.00                             |
+| Booking 5025  ONGOING   18-Oct-26 -> 22-Oct-26  Mahindra XUV700 (TN23GH8765) |
+|     rent 12800.00, late fee 0.00, paid 4000.00, balance 8800.00              |
+|       - payment 90053 ADVANCE  UPI        4000.00                            |
+| 4 booking(s) found.                                                          |
++------------------------------------------------------------------------------+
+--------------
+CALL report_branch_summary()
+--------------
+
++-------------------------------------+----------+---------------------------------------+
+| branch                              | revenue  | fleet                                 |
++-------------------------------------+----------+---------------------------------------+
+| DriveEase Katpadi (Vellore)         | 35300.00 | AVAILABLE=4  RENTED=1                 |
+| DriveEase T Nagar (Chennai)         | 44170.00 | AVAILABLE=3  RENTED=1                 |
+| DriveEase Chennai Airport (Chennai) | 37900.00 | AVAILABLE=2  MAINTENANCE=1            |
+| DriveEase Koramangala (Bengaluru)   | 29900.00 | AVAILABLE=3  RENTED=1                 |
+| DriveEase Hitech City (Hyderabad)   | 34400.00 | AVAILABLE=2  MAINTENANCE=1  RETIRED=1 |
++-------------------------------------+----------+---------------------------------------+
+--------------
+-- 4. RESULT-SET reports (module report_*)
+--------------
+
+--------------
+CALL report_branch_revenue(6)
+--------------
+
++---------------------------+---------+----------+----------+
+| branch_name               | month   | revenue  | bookings |
++---------------------------+---------+----------+----------+
+| DriveEase Katpadi         | 2026-10 | 11600.00 |        4 |
+| DriveEase T Nagar         | 2026-10 | 11100.00 |        2 |
+| DriveEase Koramangala     | 2026-10 | 10000.00 |        2 |
+| DriveEase Hitech City     | 2026-10 |  9400.00 |        2 |
+| DriveEase Chennai Airport | 2026-10 |  4000.00 |        1 |
+| DriveEase Katpadi         | 2026-09 | 11800.00 |        2 |
+| DriveEase T Nagar         | 2026-09 |  6400.00 |        1 |
+| DriveEase Hitech City     | 2026-09 |  3900.00 |        1 |
+| DriveEase Koramangala     | 2026-09 |  2500.00 |        1 |
+| DriveEase Chennai Airport | 2026-09 |   700.00 |        1 |
+| DriveEase Chennai Airport | 2026-08 | 19000.00 |        2 |
+| DriveEase Hitech City     | 2026-08 |  8300.00 |        2 |
+| DriveEase T Nagar         | 2026-08 |  2320.00 |        1 |
+| DriveEase Katpadi         | 2026-08 |     0.00 |        1 |
+| DriveEase Koramangala     | 2026-07 | 13000.00 |        1 |
+| DriveEase T Nagar         | 2026-07 |  8350.00 |        2 |
+| DriveEase Katpadi         | 2026-07 |  6100.00 |        2 |
+| DriveEase Chennai Airport | 2026-06 | 14200.00 |        1 |
+| DriveEase Hitech City     | 2026-06 | 12800.00 |        1 |
+| DriveEase T Nagar         | 2026-06 | 11200.00 |        1 |
+| DriveEase Koramangala     | 2026-06 |  4400.00 |        1 |
+| DriveEase Katpadi         | 2026-06 |  1300.00 |        1 |
+| DriveEase T Nagar         | 2026-05 |  4800.00 |        1 |
+| DriveEase Katpadi         | 2026-05 |  4500.00 |        1 |
++---------------------------+---------+----------+----------+
+--------------
+CALL report_fleet_utilisation(30)
+--------------
+
++------------+------------+---------------------------+---------------+---------------------------+-------------+-------------+-----------------+
+| vehicle_id | reg_number | vehicle                   | category_name | branch_name               | status      | days_rented | utilisation_pct |
++------------+------------+---------------------------+---------------+---------------------------+-------------+-------------+-----------------+
+|        113 | KA01AB1212 | Tata Tiago                | Hatchback     | DriveEase Koramangala     | AVAILABLE   |         4.0 |            13.3 |
+|        115 | KA01EF5656 | BMW 3 Series              | Luxury        | DriveEase Koramangala     | RENTED      |         3.5 |            11.6 |
+|        102 | TN23CD5678 | Hyundai i20               | Hatchback     | DriveEase Katpadi         | AVAILABLE   |         3.0 |            10.0 |
+|        106 | TN09AB2222 | Toyota Innova Crysta      | SUV           | DriveEase T Nagar         | AVAILABLE   |         3.0 |            10.0 |
+|        104 | TN23GH8765 | Mahindra XUV700           | SUV           | DriveEase Katpadi         | RENTED      |         2.4 |             8.1 |
+|        117 | TS09AB9090 | Kia Seltos                | SUV           | DriveEase Hitech City     | AVAILABLE   |         2.3 |             7.5 |
+|        101 | TN23AB1234 | Maruti Swift              | Hatchback     | DriveEase Katpadi         | AVAILABLE   |         2.0 |             6.7 |
+|        108 | TN09EF4444 | Tata Nexon EV             | SUV           | DriveEase T Nagar         | AVAILABLE   |         2.0 |             6.7 |
+|        107 | TN09CD3333 | Hyundai Verna             | Sedan         | DriveEase T Nagar         | RENTED      |         1.5 |             4.9 |
+|        103 | TN23EF4321 | Honda City                | Sedan         | DriveEase Katpadi         | AVAILABLE   |         0.0 |             0.0 |
+|        105 | TN23JK1111 | Honda Activa 6G           | Scooter       | DriveEase Katpadi         | AVAILABLE   |         0.0 |             0.0 |
+|        109 | TN09GH5555 | Royal Enfield Classic 350 | Motorbike     | DriveEase T Nagar         | AVAILABLE   |         0.0 |             0.0 |
+|        110 | TN22AB6666 | Mercedes-Benz C-Class     | Luxury        | DriveEase Chennai Airport | AVAILABLE   |         0.0 |             0.0 |
+|        111 | TN22CD7777 | Maruti Baleno             | Hatchback     | DriveEase Chennai Airport | AVAILABLE   |         0.0 |             0.0 |
+|        112 | TN22EF8888 | Toyota Fortuner           | SUV           | DriveEase Chennai Airport | MAINTENANCE |         0.0 |             0.0 |
+|        114 | KA01CD3434 | Skoda Slavia              | Sedan         | DriveEase Koramangala     | AVAILABLE   |         0.0 |             0.0 |
+|        116 | KA01GH7878 | Ather 450X                | Scooter       | DriveEase Koramangala     | AVAILABLE   |         0.0 |             0.0 |
+|        118 | TS09CD1313 | Maruti Dzire              | Sedan         | DriveEase Hitech City     | MAINTENANCE |         0.0 |             0.0 |
+|        119 | TS09EF2424 | Bajaj Pulsar NS200        | Motorbike     | DriveEase Hitech City     | AVAILABLE   |         0.0 |             0.0 |
++------------+------------+---------------------------+---------------+---------------------------+-------------+-------------+-----------------+
+--------------
+CALL report_top_customers(5)
+--------------
+
++-------------+---------------+------------+---------+-------------+
+| customer_id | name          | phone      | rentals | total_spent |
++-------------+---------------+------------+---------+-------------+
+|        1001 | Aditya Verma  | 9876500001 |       4 |    23300.00 |
+|        1002 | Meera Iyer    | 9876500002 |       3 |    22000.00 |
+|        1004 | Fathima Begum | 9876500004 |       3 |    15250.00 |
+|        1006 | Kavya Hegde   | 9876500006 |       3 |    10900.00 |
+|        1003 | Rahul Nair    | 9876500003 |       2 |    30200.00 |
++-------------+---------------+------------+---------+-------------+
+--------------
+CALL report_pending_dues()
+--------------
+
++------------+-----------------+------------+-----------+------------+---------------------+--------------+---------+---------+
+| booking_id | customer        | phone      | status    | reg_number | end_date            | total_charge | paid    | balance |
++------------+-----------------+------------+-----------+------------+---------------------+--------------+---------+---------+
+|       5021 | Pooja Agarwal   | 9876500010 | COMPLETED | TS09AB9090 | 2026-10-14 10:00:00 |      7600.00 | 6400.00 | 1200.00 |
+|       5027 | Kavya Hegde     | 9876500006 | ONGOING   | KA01EF5656 | 2026-10-19 09:00:00 |     13000.00 | 4000.00 | 9000.00 |
+|       5025 | Aditya Verma    | 9876500001 | ONGOING   | TN23GH8765 | 2026-10-22 10:00:00 |     12800.00 | 4000.00 | 8800.00 |
+|       5026 | Fathima Begum   | 9876500004 | ONGOING   | TN09CD3333 | 2026-10-21 09:00:00 |      4400.00 | 1500.00 | 2900.00 |
+|       5029 | Rahul Nair      | 9876500003 | BOOKED    | TN22AB6666 | 2026-10-27 10:00:00 |     13000.00 | 4000.00 | 9000.00 |
+|       5030 | Sandeep Reddy   | 9876500005 | BOOKED    | TS09AB9090 | 2026-10-24 08:00:00 |      9600.00 | 3000.00 | 6600.00 |
+|       5031 | Ananya Krishnan | 9876500008 | BOOKED    | KA01CD3434 | 2026-11-01 09:00:00 |      4400.00 |    0.00 | 4400.00 |
+|       5028 | Meera Iyer      | 9876500002 | BOOKED    | TN23AB1234 | 2026-10-25 09:00:00 |      4500.00 | 1500.00 | 3000.00 |
++------------+-----------------+------------+-----------+------------+---------------------+--------------+---------+---------+
+--------------
+-- 5. Availability search (module rental_*)
+--------------
+
+--------------
+CALL rental_search_available('Chennai', NULL, NOW() + INTERVAL 3 DAY, NOW() + INTERVAL 5 DAY)
+--------------
+
++------------+------------+---------------+---------------+-----------+--------------+---------------+------------+------------------+-----------+---------------------------+---------+----------------+
+| vehicle_id | reg_number | brand         | model         | fuel_type | transmission | category_name | daily_rate | seating_capacity | branch_id | branch_name               | city    | estimated_rent |
++------------+------------+---------------+---------------+-----------+--------------+---------------+------------+------------------+-----------+---------------------------+---------+----------------+
+|        109 | TN09GH5555 | Royal Enfield | Classic 350   | PETROL    | MANUAL       | Motorbike     |     800.00 |                2 |         2 | DriveEase T Nagar         | Chennai |        1600.00 |
+|        111 | TN22CD7777 | Maruti        | Baleno        | PETROL    | MANUAL       | Hatchback     |    1500.00 |                5 |         3 | DriveEase Chennai Airport | Chennai |        3000.00 |
+|        107 | TN09CD3333 | Hyundai       | Verna         | PETROL    | AUTOMATIC    | Sedan         |    2200.00 |                5 |         2 | DriveEase T Nagar         | Chennai |        4400.00 |
+|        106 | TN09AB2222 | Toyota        | Innova Crysta | DIESEL    | MANUAL       | SUV           |    3200.00 |                7 |         2 | DriveEase T Nagar         | Chennai |        6400.00 |
+|        108 | TN09EF4444 | Tata          | Nexon EV      | ELECTRIC  | AUTOMATIC    | SUV           |    3200.00 |                7 |         2 | DriveEase T Nagar         | Chennai |        6400.00 |
++------------+------------+---------------+---------------+-----------+--------------+---------------+------------+------------------+-----------+---------------------------+---------+----------------+
+--------------
+-- 6. Trigger in action: try to book a vehicle under maintenance (error 20003)
+--------------
+
+--------------
+CALL rental_create_booking(1003, 112, 508, NULL, NOW() + INTERVAL 1 DAY, NOW() + INTERVAL 2 DAY, 0, NULL, @new_booking)
+--------------
+
+ERROR 20003 (45000) at line 37: Vehicle 112 is MAINTENANCE and cannot be booked
+--------------
+-- 7. Trigger in action: a 19-year-old customer (error 20001)
+--------------
+
+--------------
+CALL rental_create_booking(1011, 116, 511, NULL, NOW() + INTERVAL 1 DAY, NOW() + INTERVAL 2 DAY, 0, NULL, @new_booking)
+--------------
+
+ERROR 20001 (45000) at line 40: Customer must be at least 21 years old on the pickup date (age 19)
+--------------
+-- 8. Audit trail written by the booking triggers
+--------------
+
+--------------
+SELECT * FROM booking_audit ORDER BY audit_id DESC LIMIT 15
+--------------
+
++----------+------------+--------+------------+------------+---------------------+---------------------+
+| audit_id | booking_id | action | old_status | new_status | changed_by          | changed_on          |
++----------+------------+--------+------------+------------+---------------------+---------------------+
+|       36 |       5031 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       35 |       5030 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       34 |       5029 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       33 |       5028 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       32 |       5027 | UPDATE | BOOKED     | ONGOING    | driveease@localhost | 2026-10-20 20:21:45 |
+|       31 |       5027 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       30 |       5026 | UPDATE | BOOKED     | ONGOING    | driveease@localhost | 2026-10-20 20:21:45 |
+|       29 |       5026 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       28 |       5025 | UPDATE | BOOKED     | ONGOING    | driveease@localhost | 2026-10-20 20:21:45 |
+|       27 |       5025 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       26 |       5024 | UPDATE | BOOKED     | CANCELLED  | driveease@localhost | 2026-10-20 20:21:45 |
+|       25 |       5024 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       24 |       5023 | UPDATE | BOOKED     | CANCELLED  | driveease@localhost | 2026-10-20 20:21:45 |
+|       23 |       5023 | INSERT | NULL       | BOOKED     | driveease@localhost | 2026-10-20 20:21:45 |
+|       22 |       5022 | INSERT | NULL       | COMPLETED  | driveease@localhost | 2026-10-20 20:21:45 |
++----------+------------+--------+------------+------------+---------------------+---------------------+
+--------------
+-- 9. Every stored object in the database
+--------------
+
+--------------
+SELECT routine_type AS object_type, routine_name AS name
+  FROM information_schema.routines WHERE routine_schema = 'driveease'
+UNION ALL
+SELECT 'TRIGGER', CONCAT(trigger_name, '  (', action_timing, ' ', event_manipulation, ' ON ', event_object_table, ')')
+  FROM information_schema.triggers WHERE trigger_schema = 'driveease'
+UNION ALL
+SELECT table_type, table_name FROM information_schema.tables WHERE table_schema = 'driveease'
+ORDER BY 1, 2
+--------------
+
++-------------+---------------------------------------------------------+
+| object_type | name                                                    |
++-------------+---------------------------------------------------------+
+| BASE TABLE  | booking                                                 |
+| BASE TABLE  | booking_audit                                           |
+| BASE TABLE  | branch                                                  |
+| BASE TABLE  | customer                                                |
+| BASE TABLE  | employee                                                |
+| BASE TABLE  | maintenance                                             |
+| BASE TABLE  | payment                                                 |
+| BASE TABLE  | vehicle                                                 |
+| BASE TABLE  | vehicle_category                                        |
+| FUNCTION    | fn_balance_due                                          |
+| FUNCTION    | fn_customer_age                                         |
+| FUNCTION    | fn_is_vehicle_available                                 |
+| FUNCTION    | fn_late_fee                                             |
+| FUNCTION    | fn_rental_amount                                        |
+| FUNCTION    | fn_rental_days                                          |
+| FUNCTION    | fn_total_paid                                           |
+| PROCEDURE   | fleet_auto_schedule_service                             |
+| PROCEDURE   | fleet_schedule_maintenance                              |
+| PROCEDURE   | fleet_update_maintenance                                |
+| PROCEDURE   | rental_add_payment                                      |
+| PROCEDURE   | rental_cancel_booking                                   |
+| PROCEDURE   | rental_create_booking                                   |
+| PROCEDURE   | rental_customer_history                                 |
+| PROCEDURE   | rental_print_customer_history                           |
+| PROCEDURE   | rental_record_pickup                                    |
+| PROCEDURE   | rental_record_return                                    |
+| PROCEDURE   | rental_search_available                                 |
+| PROCEDURE   | report_branch_revenue                                   |
+| PROCEDURE   | report_branch_summary                                   |
+| PROCEDURE   | report_fleet_utilisation                                |
+| PROCEDURE   | report_pending_dues                                     |
+| PROCEDURE   | report_top_customers                                    |
+| PROCEDURE   | run_all_tests                                           |
+| PROCEDURE   | sp_add_branch                                           |
+| PROCEDURE   | sp_add_employee                                         |
+| PROCEDURE   | sp_add_vehicle                                          |
+| PROCEDURE   | sp_register_customer                                    |
+| PROCEDURE   | sp_retire_vehicle                                       |
+| PROCEDURE   | sp_update_category_rate                                 |
+| PROCEDURE   | t_expect                                                |
+| PROCEDURE   | t_result                                                |
+| TRIGGER     | trg_booking_after_delete  (AFTER DELETE ON booking)     |
+| TRIGGER     | trg_booking_after_insert  (AFTER INSERT ON booking)     |
+| TRIGGER     | trg_booking_after_update  (AFTER UPDATE ON booking)     |
+| TRIGGER     | trg_booking_before_insert  (BEFORE INSERT ON booking)   |
+| TRIGGER     | trg_booking_before_update  (BEFORE UPDATE ON booking)   |
+| TRIGGER     | trg_customer_before_insert  (BEFORE INSERT ON customer) |
+| TRIGGER     | trg_customer_before_update  (BEFORE UPDATE ON customer) |
+| TRIGGER     | trg_maint_after_insert  (AFTER INSERT ON maintenance)   |
+| TRIGGER     | trg_maint_after_update  (AFTER UPDATE ON maintenance)   |
+| TRIGGER     | trg_maint_before_insert  (BEFORE INSERT ON maintenance) |
+| TRIGGER     | trg_payment_before_insert  (BEFORE INSERT ON payment)   |
+| TRIGGER     | trg_vehicle_before_update  (BEFORE UPDATE ON vehicle)   |
+| VIEW        | v_booking_summary                                       |
+| VIEW        | v_vehicle_catalog                                       |
++-------------+---------------------------------------------------------+

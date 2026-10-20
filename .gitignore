@@ -1,0 +1,8 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS / editors
+.DS_Store
+.claude/
