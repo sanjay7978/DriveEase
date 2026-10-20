@@ -1,29 +1,39 @@
 {% extends "base.html" %}
-{% block title %}Database objects{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}Database{% endblock %}
 {% block content %}
-<div class="head">
-  <div><h1>Database objects</h1><div class="sub">Everything in the MySQL database <span class="mono">driveease</span>, read live from INFORMATION_SCHEMA</div></div>
+{% set counts = {} %}
+{% for o in objects %}{% set _ = counts.update({o.object_type: counts.get(o.object_type, 0) + 1}) %}{% endfor %}
+{% call ui.header('Under the hood', 'Database objects', 'Everything in the MySQL database driveease, read live from INFORMATION_SCHEMA. Pick one to see its SQL.') %}{% endcall %}
+
+<div class="grid g5 stagger">
+  {% for t, label in [('BASE TABLE','Tables'), ('VIEW','Views'), ('FUNCTION','Functions'), ('PROCEDURE','Procedures'), ('TRIGGER','Triggers')] %}
+  <div class="card dark lift gauge" style="padding:18px"><div class="g-value" data-count="{{ counts.get(t, 0) }}">{{ counts.get(t, 0) }}</div><div class="g-label">{{ label }}</div></div>
+  {% endfor %}
 </div>
 
-<div class="grid g2">
-  <div class="panel table-wrap">
-    <table>
-      <tr><th>Type</th><th>Name</th><th></th></tr>
+<div class="grid g-db mt">
+  <section class="card flush objlist">
+    <div class="table-wrap" style="max-height:74vh;overflow:auto"><table>
+      <thead><tr><th>Type</th><th>Name</th></tr></thead>
+      <tbody>
       {% for o in objects %}
-      <tr><td class="small">{{ 'TABLE' if o.object_type == 'BASE TABLE' else o.object_type }}</td>
-          <td class="mono">{{ o.object_name }}{% if o.detail %}<div class="small muted">{{ o.detail }}</div>{% endif %}</td>
-          <td><a href="{{ url_for('database', name=o.object_name, type=o.object_type) }}">source</a></td></tr>
+      <tr class="{{ 'sel' if o.object_name == name }}"><td class="objtype">{{ 'TABLE' if o.object_type == 'BASE TABLE' else o.object_type }}</td>
+          <td><a class="mono" href="{{ url_for('database', name=o.object_name, type=o.object_type) }}">{{ o.object_name }}</a>
+            {% if o.detail %}<div class="small muted">{{ o.detail }}</div>{% endif %}</td></tr>
       {% endfor %}
-    </table>
-  </div>
-  <div class="panel">
+      </tbody>
+    </table></div>
+  </section>
+  <section class="card">
     {% if source %}
-      <h2 class="mono">{{ 'TABLE' if otype == 'BASE TABLE' else otype }} {{ name }}</h2>
+      <div class="card-head"><h2 class="mono" style="text-transform:none">{{ name }}</h2><span class="chip">{{ 'TABLE' if otype == 'BASE TABLE' else otype }}</span></div>
       <pre class="src">{{ source }}</pre>
     {% else %}
       <h2>Source viewer</h2>
-      <p class="muted">Pick a table, view, function, procedure or trigger on the left to see its SQL exactly as stored in MySQL.</p>
+      <p class="muted">Choose a table, view, function, procedure or trigger on the left to see its SQL exactly as MySQL stores it.</p>
+      <div style="color:var(--line-2);max-width:360px;margin:30px auto 0">{{ ui.car('suv') }}</div>
     {% endif %}
-  </div>
+  </section>
 </div>
 {% endblock %}

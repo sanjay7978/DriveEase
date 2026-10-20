@@ -80,16 +80,16 @@ The same from the VS Code terminal:
 | Page | What it does | Database object called |
 |---|---|---|
 | Dashboard | fleet status, revenue, dues, overdue returns, audit log | `fn_balance_due`, `fn_late_fee`, `booking_audit` |
-| Find a vehicle | availability by city / category / dates (FR-03) | `rental_search_available` |
+| Find a ride | availability by city / category / dates (FR-03) | `rental_search_available` |
 | New booking | create booking + advance (FR-04) | `rental_create_booking` + triggers |
 | Booking detail | pickup, return, cancel, payments (FR-05…FR-08) | `rental_record_pickup`, `rental_record_return`, `rental_cancel_booking`, `rental_add_payment` |
 | Customers | register + history (FR-01, FR-12) | `sp_register_customer`, `rental_customer_history` |
-| Vehicles | add / retire (FR-02) | `sp_add_vehicle`, `sp_retire_vehicle` |
-| Maintenance | schedule / close / auto-schedule (FR-09) | `fleet_*` procedures, maintenance triggers |
+| Fleet | add / retire (FR-02) | `sp_add_vehicle`, `sp_retire_vehicle` |
+| Garage | schedule / close / auto-schedule (FR-09) | `fleet_*` procedures, maintenance triggers |
 | Reports | revenue, branch summary, top customers, dues, utilisation (FR-11) | `report_*` procedures |
-| Branches & staff | branches, employees, category prices (FR-10) | `sp_add_branch`, `sp_add_employee`, `sp_update_category_rate` |
-| Test cases | runs all 28 tests inside MySQL | `run_all_tests()` |
-| Database objects | lists every object and shows its SQL | `INFORMATION_SCHEMA`, `SHOW CREATE` |
+| Branches | branches, employees, category prices (FR-10) | `sp_add_branch`, `sp_add_employee`, `sp_update_category_rate` |
+| Tests | runs all 28 tests inside MySQL | `run_all_tests()` |
+| Database | lists every object and shows its SQL | `INFORMATION_SCHEMA`, `SHOW CREATE` |
 
 Any error raised by a trigger or procedure (error numbers 200xx) is shown to the user as a red message.
 

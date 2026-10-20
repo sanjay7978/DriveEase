@@ -1,51 +1,56 @@
 {% extends "base.html" %}
-{% block title %}Maintenance{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}Garage{% endblock %}
 {% block content %}
-<div class="head">
-  <div><h1>Maintenance</h1><div class="sub">FR-09 · vehicles with an open job are blocked from booking automatically</div></div>
-  <div><span class="dbcall">fleet_schedule_maintenance</span><span class="dbcall">fleet_update_maintenance</span><span class="dbcall">trg_maint_after_insert</span></div>
-</div>
+{% set open_jobs = rows | rejectattr('maint_status', 'equalto', 'DONE') | list %}
+{% call ui.header('FR-09 · Maintenance', 'The garage', open_jobs|length ~ ' open job(s). A vehicle with an open job is blocked from booking automatically.') %}
+  {{ ui.sql('fleet_schedule_maintenance', 'fleet_update_maintenance', 'trg_maint_after_insert') }}
+{% endcall %}
 
-<div class="grid g2">
-  <div class="panel">
-    <h2>Schedule a job</h2>
+<div class="grid g-2-1">
+  <section class="card">
+    <h2>Book a service</h2>
     <form method="post">
       <div class="form-grid">
-        <div style="grid-column: span 2"><label>Vehicle</label>
-          <select name="vehicle_id" required>{% for v in vehicles %}<option value="{{ v.vehicle_id }}">{{ v.name }} · {{ v.reg_number }} [{{ v.status }}]</option>{% endfor %}</select></div>
+        <div class="span-all"><label>Vehicle</label>
+          <select name="vehicle_id" required>{% for v in vehicles %}<option value="{{ v.vehicle_id }}">{{ v.name }} · {{ v.reg_number }} [{{ ui.STATUS_LABELS[v.status] }}]</option>{% endfor %}</select></div>
         <div><label>Type</label><select name="service_type">{% for t in service_types %}<option>{{ t }}</option>{% endfor %}</select></div>
         <div><label>Service date</label><input type="date" name="service_date" value="{{ today }}"></div>
-        <div style="grid-column: span 2"><label>Description</label><input name="description" maxlength="200"></div>
+        <div class="span-all"><label>What needs doing</label><input name="description" maxlength="200" placeholder="e.g. brake pads, AC not cooling"></div>
       </div>
-      <div class="actions"><button class="btn">Schedule</button>
-        <span class="small muted">A RENTED or RETIRED vehicle is refused by trigger trg_maint_before_insert.</span></div>
+      <div class="actions"><button class="btn">Send to garage</button>
+        <span class="hint">A vehicle on rent or retired is refused by trigger trg_maint_before_insert.</span></div>
     </form>
-  </div>
-  <div class="panel">
-    <h2>Periodic service check</h2>
-    <p class="muted">Runs a cursor over every available vehicle and schedules a GENERAL service for any vehicle
-      not serviced in the last 180 days (skipping vehicles booked in the next 3 days).</p>
+  </section>
+
+  <section class="card dark">
+    <h2 style="color:var(--amber)">Service due check</h2>
+    <p style="color:#c9c6bf;margin-top:-4px">An explicit cursor walks through every available vehicle and books a general service for any that has not had one in 180 days (skipping vehicles booked in the next 3 days).</p>
     <form method="post" action="{{ url_for('maintenance_auto') }}">
-      <button class="btn sec">Run auto-schedule</button> <span class="dbcall">fleet_auto_schedule_service</span>
+      <button class="btn">Run service check</button>
     </form>
-  </div>
+    <div class="mt"><span class="sqltag"><b>SQL</b><span style="color:#c9c6bf">fleet_auto_schedule_service</span></span></div>
+  </section>
 </div>
 
-<div class="panel table-wrap">
-  <table>
-    <tr><th>Job</th><th>Vehicle</th><th>Branch</th><th>Date</th><th>Type</th><th>Description</th><th class="num">Cost</th><th>Status</th><th>Update</th></tr>
+<section class="card flush mt">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Job</th><th>Vehicle</th><th>Branch</th><th>Date</th><th>Type</th><th>Work</th><th class="num">Cost</th><th>Status</th><th>Update</th></tr></thead>
+    <tbody>
     {% for m in rows %}
-    <tr><td>{{ m.maint_id }}</td>
-        <td>{{ m.vehicle }}<div class="small muted">{{ m.reg_number }} · <span class="badge b-{{ m.vehicle_status }}">{{ m.vehicle_status }}</span></div></td>
-        <td>{{ m.branch_name }}</td><td>{{ m.service_date | d }}</td><td>{{ m.service_type }}</td>
-        <td>{{ m.description or '–' }}</td><td class="num">{{ m.cost | money }}</td>
-        <td><span class="badge b-{{ m.maint_status }}">{{ m.maint_status }}</span></td>
+    <tr><td class="muted">{{ m.maint_id }}</td>
+        <td>{{ m.vehicle }}<div style="margin-top:5px">{{ ui.plate(m.reg_number) }}</div></td>
+        <td class="small">{{ m.branch_name }}</td><td class="small">{{ m.service_date | d }}</td>
+        <td><span class="chip">{{ m.service_type }}</span></td>
+        <td class="small">{{ m.description or '–' }}</td><td class="num">{{ m.cost | money }}</td>
+        <td>{{ ui.status(m.maint_status) }}</td>
         <td>{% if m.maint_status != 'DONE' %}
-          <form class="inline" method="post" action="{{ url_for('maintenance_update', maint_id=m.maint_id) }}" style="display:flex;gap:6px">
-            <select name="status" style="width:auto">{% for s in ['IN_PROGRESS','DONE'] %}<option>{{ s }}</option>{% endfor %}</select>
-            <input name="cost" type="number" min="0" placeholder="Cost" style="width:90px">
-            <button class="btn sm">Save</button></form>{% endif %}</td></tr>
+          <form method="post" action="{{ url_for('maintenance_update', maint_id=m.maint_id) }}" style="display:flex;gap:6px;align-items:center">
+            <select name="status" style="width:auto;padding:6px 8px">{% for st in ['IN_PROGRESS','DONE'] %}<option value="{{ st }}">{{ ui.STATUS_LABELS[st] }}</option>{% endfor %}</select>
+            <input name="cost" type="number" min="0" placeholder="₹ cost" style="width:90px;padding:6px 8px">
+            <button class="btn sm dark">Save</button></form>{% endif %}</td></tr>
     {% endfor %}
-  </table>
-</div>
+    </tbody>
+  </table></div>
+</section>
 {% endblock %}

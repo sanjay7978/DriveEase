@@ -1,38 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Test cases{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}Tests{% endblock %}
 {% block content %}
-<div class="head">
-  <div><h1>Test cases</h1>
-    <div class="sub">Runs <span class="mono">CALL run_all_tests()</span> inside MySQL. Every change the tests make is rolled back, so the data is not changed.</div></div>
-  <form method="post"><button class="btn">Run all test cases</button></form>
-</div>
+{% call ui.header('Verification', 'Test cases', 'Runs CALL run_all_tests() inside MySQL. Every change the tests make is rolled back, so the data stays untouched.') %}
+  <form method="post"><button class="btn">{{ 'Run again' if results is not none else 'Start the test run' }}</button></form>
+{% endcall %}
 
 {% if results is none %}
-<div class="panel">
-  <p>The suite has 28 test cases covering every kind of stored object:</p>
-  <ul>
-    <li><b>Functions</b>: age, rental days and amount, late fee, availability</li>
-    <li><b>Procedures</b>: customer registration, adding and retiring vehicles, duplicate detection</li>
-    <li><b>Modules</b> (rental_*, fleet_*): create booking, pickup, late one-way return, cancellation refunds (100% / 50%)</li>
-    <li><b>Triggers</b>: age &lt; 21, licence expiring, double booking, vehicle in maintenance, odometer going back, invalid status change, payment on a cancelled booking, audit trail, maintenance status sync</li>
-    <li><b>Cursors</b>: explicit-cursor batch job, cursor over pending dues, customer history</li>
-  </ul>
-  <p class="muted">The same tests run in VS Code: open <span class="mono">sql/08_demo_queries.sql</span> and run <span class="mono">CALL run_all_tests();</span></p>
+<div class="grid g3 stagger">
+  <section class="card lift"><div class="v-cat">Functions · Procedures</div><div class="v-name">6 tests</div><p class="small muted">Age, availability, customer registration, duplicates, adding and retiring vehicles.</p></section>
+  <section class="card lift"><div class="v-cat">Modules (packages)</div><div class="v-name">8 tests</div><p class="small muted">Booking with advance, pickup, a late one-way return, 100% / 50% refunds, staff role check.</p></section>
+  <section class="card lift"><div class="v-cat">Triggers · Cursors</div><div class="v-name">14 tests</div><p class="small muted">Age &lt; 21, licence expiry, double booking, garage block, odometer, audit trail, cursor jobs and reports.</p></section>
 </div>
+<p class="hint mt">The same suite runs in VS Code: <span class="mono">CALL run_all_tests();</span></p>
 {% else %}
   {% set passed = results | selectattr('result', 'equalto', 'PASS') | list | length %}
-  <div class="panel summary">
-    <span class="pill {{ 'ok' if passed == results|length else 'bad' }}">{{ passed }} / {{ results | length }} passed</span>
-    {% if summary %}<span class="muted">{{ summary.test_case }} · {{ summary.actual_output }}</span>{% endif %}
-  </div>
-  <div class="panel table-wrap">
-    <table>
-      <tr><th>Test</th><th>Result</th><th>Area</th><th>Test case</th><th>Actual output from MySQL</th></tr>
+  {% set all_ok = passed == results|length and results|length > 0 %}
+  <section class="flag {{ '' if all_ok else 'bad' }}">
+    <div class="big">{{ passed }}<small>/{{ results | length }}</small></div>
+    <div class="what">{{ 'Chequered flag, all tests passed' if all_ok else 'Some tests failed' }}
+      <span>{{ summary.actual_output if summary else '' }}</span></div>
+  </section>
+  <section class="card flush mt">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Test</th><th>Result</th><th>Area</th><th>Test case</th><th>Actual output from MySQL</th></tr></thead>
+      <tbody>
       {% for r in results %}
-      <tr><td class="mono"><b>{{ r.tc }}</b></td><td><span class="badge b-{{ r.result }}">{{ r.result }}</span></td>
-          <td>{{ r.area }}</td><td>{{ r.test_case }}</td><td class="mono small">{{ r.actual_output }}</td></tr>
+      <tr class="tr-reveal"><td class="idlink">{{ r.tc }}</td><td>{{ ui.status(r.result) }}</td>
+          <td><span class="area area-{{ r.area }}">{{ r.area }}</span></td>
+          <td>{{ r.test_case }}</td><td class="mono small">{{ r.actual_output }}</td></tr>
       {% endfor %}
-    </table>
-  </div>
+      </tbody>
+    </table></div>
+  </section>
 {% endif %}
 {% endblock %}
