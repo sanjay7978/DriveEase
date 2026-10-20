@@ -1,63 +1,60 @@
 {% extends "base.html" %}
-{% block title %}Vehicles{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}Fleet{% endblock %}
 {% block content %}
-<div class="head">
-  <div><h1>Fleet register</h1><div class="sub">FR-02 · add, view and retire vehicles</div></div>
-  <div><span class="dbcall">sp_add_vehicle</span><span class="dbcall">sp_retire_vehicle</span></div>
-</div>
+{% call ui.header('FR-02 · Fleet register', 'The fleet', rows|length ~ ' vehicles across all branches.') %}
+  {{ ui.sql('sp_add_vehicle', 'sp_retire_vehicle') }}
+{% endcall %}
 
-<div class="panel">
+<section class="card">
   <form class="filters" method="get">
     <div><label>Status</label>
-      <select name="status"><option value="">All</option>
-        {% for s in ['AVAILABLE','RENTED','MAINTENANCE','RETIRED'] %}<option {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}
+      <select name="status" onchange="this.form.submit()"><option value="">All statuses</option>
+        {% for s in ['AVAILABLE','RENTED','MAINTENANCE','RETIRED'] %}<option value="{{ s }}" {{ 'selected' if status == s }}>{{ ui.STATUS_LABELS[s] }}</option>{% endfor %}
       </select></div>
     <div><label>Branch</label>
-      <select name="branch"><option value="">All branches</option>
+      <select name="branch" onchange="this.form.submit()"><option value="">All branches</option>
         {% for b in branches %}<option value="{{ b.branch_id }}" {{ 'selected' if branch|string == b.branch_id|string }}>{{ b.branch_name }}</option>{% endfor %}
       </select></div>
-    <button class="btn sec">Filter</button>
+    <a class="btn ghost" href="#add">+ Add a vehicle</a>
   </form>
+</section>
+
+<div class="vehicle-grid mt stagger">
+  {% for v in rows %}
+  <article class="card vcard lift">
+    <div class="v-top"><span class="v-cat">#{{ v.vehicle_id }} · {{ v.category_name }}</span>{{ ui.status(v.status) }}</div>
+    {{ ui.car(v.category_name) }}
+    <div class="v-top"><div class="v-name">{{ v.brand }} {{ v.model }}</div>{{ ui.plate(v.reg_number) }}</div>
+    <div class="chips"><span class="chip">{{ v.mfg_year }}</span><span class="chip">{{ v.fuel_type }}</span><span class="chip">{{ v.transmission }}</span><span class="chip">{{ '{:,}'.format(v.odometer) }} km</span></div>
+    <div class="small muted">{{ v.branch_name }}, {{ v.city }}{% if v.open_bookings %} · {{ v.open_bookings }} open booking{{ 's' if v.open_bookings > 1 }}{% endif %}</div>
+    <div class="v-foot">
+      <div class="price">{{ v.daily_rate | money }}<small>/day</small></div>
+      {% if v.status != 'RETIRED' %}
+      <form class="inline" method="post" action="{{ url_for('retire_vehicle', vehicle_id=v.vehicle_id) }}"
+            onsubmit="return confirm('Retire {{ v.reg_number }} from the fleet?')">
+        <button class="btn sm ghost">Retire</button></form>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
 </div>
 
-<div class="panel table-wrap">
-  <table>
-    <tr><th>ID</th><th>Reg. no.</th><th>Vehicle</th><th>Category</th><th>Fuel / gear</th><th class="num">Odometer</th>
-        <th>Branch</th><th>Status</th><th></th></tr>
-    {% for v in rows %}
-    <tr>
-      <td>{{ v.vehicle_id }}</td><td class="mono">{{ v.reg_number }}</td>
-      <td>{{ v.brand }} {{ v.model }}<div class="small muted">{{ v.mfg_year }}</div></td>
-      <td>{{ v.category_name }}<div class="small muted">{{ v.daily_rate | money }}/day</div></td>
-      <td>{{ v.fuel_type }}<div class="small muted">{{ v.transmission }}</div></td>
-      <td class="num">{{ '{:,}'.format(v.odometer) }} km</td>
-      <td>{{ v.branch_name }}</td>
-      <td><span class="badge b-{{ v.status }}">{{ v.status }}</span>
-        {% if v.open_bookings %}<div class="small muted">{{ v.open_bookings }} open booking(s)</div>{% endif %}</td>
-      <td>{% if v.status != 'RETIRED' %}
-        <form class="inline" method="post" action="{{ url_for('retire_vehicle', vehicle_id=v.vehicle_id) }}"
-              onsubmit="return confirm('Retire vehicle {{ v.reg_number }}?')">
-          <button class="btn sm sec">Retire</button></form>{% endif %}</td>
-    </tr>
-    {% endfor %}
-  </table>
-</div>
-
-<div class="panel">
-  <h2>Add a vehicle</h2>
+<section class="card mt" id="add">
+  <div class="card-head"><h2>Add a vehicle</h2><span class="hint">registration numbers must be unique</span></div>
   <form method="post">
     <div class="form-grid">
       <div><label>Registration no.</label><input name="reg_number" required maxlength="12" placeholder="TN23AB0001"></div>
       <div><label>Brand</label><input name="brand" required></div>
       <div><label>Model</label><input name="model" required></div>
-      <div><label>Mfg. year</label><input name="mfg_year" type="number" min="2010" max="2030" value="2025"></div>
+      <div><label>Year</label><input name="mfg_year" type="number" min="2010" max="2030" value="2025"></div>
       <div><label>Fuel</label><select name="fuel_type">{% for f in fuel_types %}<option>{{ f }}</option>{% endfor %}</select></div>
       <div><label>Transmission</label><select name="transmission"><option>MANUAL</option><option>AUTOMATIC</option></select></div>
       <div><label>Odometer (km)</label><input name="odometer" type="number" min="0" value="0"></div>
-      <div><label>Category</label><select name="category_id">{% for c in categories %}<option value="{{ c.category_id }}">{{ c.category_name }} ({{ c.daily_rate | money }}/day)</option>{% endfor %}</select></div>
+      <div><label>Category</label><select name="category_id">{% for c in categories %}<option value="{{ c.category_id }}">{{ c.category_name }} · {{ c.daily_rate | money }}/day</option>{% endfor %}</select></div>
       <div><label>Home branch</label><select name="branch_id">{% for b in branches %}<option value="{{ b.branch_id }}">{{ b.branch_name }}</option>{% endfor %}</select></div>
     </div>
-    <div class="actions"><button class="btn">Add vehicle</button></div>
+    <div class="actions"><button class="btn">Add to fleet</button></div>
   </form>
-</div>
+</section>
 {% endblock %}

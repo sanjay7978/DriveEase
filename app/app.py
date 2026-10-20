@@ -6,7 +6,9 @@ by triggers and procedures (error numbers 200xx) to the user.
 
 Run:  .venv/bin/python app/app.py   ->  http://127.0.0.1:5050
 """
+import math
 import os
+import re
 from datetime import datetime, timedelta
 
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -83,6 +85,17 @@ def fmt_money(value):
     if value is None:
         return "–"
     return "₹{:,.0f}".format(value) if float(value).is_integer() else "₹{:,.2f}".format(value)
+
+
+@app.template_filter("plate_fmt")
+def fmt_plate(reg):
+    """TN23AB1234 -> TN 23 AB 1234 (Indian number-plate spacing)."""
+    m = re.match(r"^([A-Z]{2})(\d{1,2})([A-Z]{0,3})(\d{1,4})$", reg or "")
+    return " ".join(p for p in m.groups() if p) if m else reg
+
+
+app.add_template_filter(math.cos, "cos")
+app.add_template_filter(math.sin, "sin")
 
 
 @app.context_processor

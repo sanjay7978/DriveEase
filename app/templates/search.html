@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Find a vehicle{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}Find a ride{% endblock %}
 {% block content %}
-<div class="head">
-  <div><h1>Find an available vehicle</h1><div class="sub">FR-03 · vehicles free in a city and category for the whole date range</div></div>
-  <div><span class="dbcall">rental_search_available (result set)</span><span class="dbcall">fn_is_vehicle_available</span></div>
-</div>
+{% call ui.header('FR-03 · Availability', 'Find a ride', 'Vehicles that are free for the whole trip: not booked, not in the garage, not retired.') %}
+  {{ ui.sql('rental_search_available', 'fn_is_vehicle_available') }}
+{% endcall %}
 
-<div class="panel">
+<section class="card">
   <form class="filters" method="get">
     <input type="hidden" name="go" value="1">
     <div><label>City</label>
@@ -19,24 +19,28 @@
     <div><label>Return</label><input type="datetime-local" name="end" value="{{ end }}" required></div>
     <button class="btn">Search</button>
   </form>
-</div>
+</section>
 
 {% if results is not none %}
-<div class="panel table-wrap">
-  <h2>{{ results | length }} vehicle(s) available</h2>
-  {% if results %}
-  <table>
-    <tr><th>Vehicle</th><th>Reg. no.</th><th>Category</th><th>Seats</th><th>Fuel / gear</th><th>Branch</th>
-        <th class="num">Rate</th><th class="num">Estimated rent</th><th></th></tr>
-    {% for r in results %}
-    <tr><td>{{ r.brand }} {{ r.model }}</td><td class="mono">{{ r.reg_number }}</td><td>{{ r.category_name }}</td>
-        <td>{{ r.seating_capacity }}</td><td>{{ r.fuel_type }} · {{ r.transmission }}</td>
-        <td>{{ r.branch_name }}<div class="small muted">{{ r.city }}</div></td>
-        <td class="num">{{ r.daily_rate | money }}/day</td><td class="num"><b>{{ r.estimated_rent | money }}</b></td>
-        <td><a class="btn sm" href="{{ url_for('booking_new', vehicle_id=r.vehicle_id, start=start, end=end) }}">Book</a></td></tr>
-    {% endfor %}
-  </table>
-  {% else %}<div class="empty">No vehicle is free for those dates. Vehicles in maintenance, retired, or already booked are excluded.</div>{% endif %}
+<div class="card-head mt"><h2>{{ results | length }} vehicle{{ '' if results|length == 1 else 's' }} ready</h2></div>
+{% if results %}
+<div class="vehicle-grid stagger">
+  {% for r in results %}
+  <article class="card vcard lift">
+    <div class="v-top"><span class="v-cat">{{ r.category_name }} · {{ r.seating_capacity }} seats</span>{{ ui.plate(r.reg_number) }}</div>
+    {{ ui.car(r.category_name) }}
+    <div class="v-name">{{ r.brand }} {{ r.model }}</div>
+    <div class="chips"><span class="chip">{{ r.fuel_type }}</span><span class="chip">{{ r.transmission }}</span><span class="chip">{{ r.city }}</span></div>
+    <div class="small muted">{{ r.branch_name }}</div>
+    <div class="v-foot">
+      <div><div class="price">{{ r.estimated_rent | money }}</div><div class="small muted">{{ r.daily_rate | money }} / day</div></div>
+      <a class="btn sm" href="{{ url_for('booking_new', vehicle_id=r.vehicle_id, start=start, end=end) }}">Book</a>
+    </div>
+  </article>
+  {% endfor %}
 </div>
+{% else %}
+<section class="card empty">No vehicle is free for those dates. Try other dates or another city.</section>
+{% endif %}
 {% endif %}
 {% endblock %}

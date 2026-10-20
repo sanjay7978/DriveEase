@@ -1,35 +1,75 @@
 {% extends "base.html" %}
-{% block title %}Branches & staff{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}Branches{% endblock %}
 {% block content %}
-<div class="head">
-  <div><h1>Branches, staff &amp; pricing</h1><div class="sub">FR-10 · administrator functions</div></div>
-  <div><span class="dbcall">sp_add_branch</span><span class="dbcall">sp_add_employee</span><span class="dbcall">sp_update_category_rate</span></div>
+{% call ui.header('FR-10 · Administration', 'Branches, staff & pricing') %}
+  {{ ui.sql('sp_add_branch', 'sp_add_employee', 'sp_update_category_rate') }}
+{% endcall %}
+
+<div class="vehicle-grid stagger">
+  {% for b in branch_rows %}
+  <article class="card lift branch">
+    <div class="v-cat">Branch {{ b.branch_id }} · {{ b.city }}</div>
+    <div class="v-name" style="margin:6px 0 4px">{{ b.branch_name }}</div>
+    <div class="small muted">{{ b.address }}</div>
+    <div class="v-foot">
+      <div><div class="price">{{ b.vehicles }}</div><div class="small muted">vehicles</div></div>
+      <div><div class="price">{{ b.staff }}</div><div class="small muted">staff</div></div>
+      <div class="small" style="text-align:right">{{ b.phone }}<div class="muted">{{ b.email or '' }}</div></div>
+    </div>
+  </article>
+  {% endfor %}
 </div>
 
-<div class="panel table-wrap"><h2>Branches</h2>
-  <table>
-    <tr><th>ID</th><th>Branch</th><th>City</th><th>Address</th><th>Phone</th><th>Email</th><th class="num">Vehicles</th><th class="num">Staff</th></tr>
-    {% for b in branch_rows %}
-    <tr><td>{{ b.branch_id }}</td><td>{{ b.branch_name }}</td><td>{{ b.city }}</td><td>{{ b.address }}</td>
-        <td>{{ b.phone }}</td><td>{{ b.email or '–' }}</td><td class="num">{{ b.vehicles }}</td><td class="num">{{ b.staff }}</td></tr>
+<section class="card flush mt">
+  <h2>Vehicle categories &amp; pricing</h2>
+  <p class="hint" style="padding:0 20px;margin:-6px 0 0">Price lives in the category (3NF), so changing it is one row: sp_update_category_rate.</p>
+  <div class="table-wrap mt"><table>
+    <thead><tr><th></th><th>Category</th><th class="num">Seats</th><th class="num">Deposit</th><th class="num">Daily rate</th><th class="num">Late fee / h</th><th>Change price</th></tr></thead>
+    <tbody>
+    {% for c in categories %}
+    <tr><td style="width:70px">{{ ui.car(c.category_name, 'mini') }}</td><td class="strong">{{ c.category_name }}</td><td class="num">{{ c.seating_capacity }}</td>
+        <td class="num">{{ c.security_deposit | money }}</td><td class="num strong">{{ c.daily_rate | money }}</td><td class="num">{{ c.late_fee_per_hr | money }}</td>
+        <td><form method="post" style="display:flex;gap:6px;align-items:center"><input type="hidden" name="kind" value="rate">
+            <input type="hidden" name="category_id" value="{{ c.category_id }}">
+            <input name="daily_rate" type="number" min="1" value="{{ c.daily_rate|int }}" style="width:96px;padding:6px 8px" title="Daily rate">
+            <input name="late_fee" type="number" min="0" value="{{ c.late_fee_per_hr|int }}" style="width:76px;padding:6px 8px" title="Late fee per hour">
+            <button class="btn sm dark">Save</button></form></td></tr>
     {% endfor %}
-  </table>
-</div>
+    </tbody>
+  </table></div>
+</section>
 
-<div class="grid g2">
-  <div class="panel"><h2>Add a branch</h2>
+<section class="card flush mt">
+  <h2>Staff</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Branch</th><th>Phone</th><th>Hired</th><th class="num">Salary</th></tr></thead>
+    <tbody>
+    {% for e in staff %}
+    <tr><td class="muted">{{ e.emp_id }}</td><td class="strong">{{ e.name }}<div class="small muted">{{ e.email or '' }}</div></td>
+        <td><span class="chip">{{ e.role }}</span></td><td class="small">{{ e.branch_name }}</td><td>{{ e.phone }}</td>
+        <td class="small">{{ e.hire_date | d }}</td><td class="num">{{ e.salary | money }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+<div class="grid g2 mt">
+  <section class="card">
+    <h2>Open a branch</h2>
     <form method="post"><input type="hidden" name="kind" value="branch">
       <div class="form-grid">
         <div><label>Name</label><input name="branch_name" required maxlength="50"></div>
         <div><label>City</label><input name="city" required maxlength="30"></div>
         <div><label>Phone (10 digits)</label><input name="phone" required pattern="[0-9]{10}" maxlength="10"></div>
         <div><label>Email</label><input name="email" type="email"></div>
-        <div style="grid-column: 1 / -1"><label>Address</label><input name="address" required maxlength="120"></div>
+        <div class="span-all"><label>Address</label><input name="address" required maxlength="120"></div>
       </div>
       <div class="actions"><button class="btn">Add branch</button></div>
     </form>
-  </div>
-  <div class="panel"><h2>Add an employee</h2>
+  </section>
+  <section class="card">
+    <h2>Hire staff</h2>
     <form method="post"><input type="hidden" name="kind" value="employee">
       <div class="form-grid">
         <div><label>Name</label><input name="name" required maxlength="50"></div>
@@ -41,31 +81,6 @@
       </div>
       <div class="actions"><button class="btn">Add employee</button></div>
     </form>
-  </div>
-</div>
-
-<div class="panel table-wrap"><h2>Staff</h2>
-  <table>
-    <tr><th>ID</th><th>Name</th><th>Role</th><th>Branch</th><th>Phone</th><th>Email</th><th>Hired</th><th class="num">Salary</th></tr>
-    {% for e in staff %}
-    <tr><td>{{ e.emp_id }}</td><td>{{ e.name }}</td><td>{{ e.role }}</td><td>{{ e.branch_name }}</td><td>{{ e.phone }}</td>
-        <td>{{ e.email or '–' }}</td><td>{{ e.hire_date | d }}</td><td class="num">{{ e.salary | money }}</td></tr>
-    {% endfor %}
-  </table>
-</div>
-
-<div class="panel table-wrap"><h2>Vehicle categories &amp; pricing</h2>
-  <table>
-    <tr><th>ID</th><th>Category</th><th class="num">Seats</th><th class="num">Deposit</th><th class="num">Daily rate</th><th class="num">Late fee / h</th><th>Change rate</th></tr>
-    {% for c in categories %}
-    <tr><td>{{ c.category_id }}</td><td>{{ c.category_name }}</td><td class="num">{{ c.seating_capacity }}</td>
-        <td class="num">{{ c.security_deposit | money }}</td><td class="num">{{ c.daily_rate | money }}</td><td class="num">{{ c.late_fee_per_hr | money }}</td>
-        <td><form method="post" style="display:flex;gap:6px"><input type="hidden" name="kind" value="rate">
-            <input type="hidden" name="category_id" value="{{ c.category_id }}">
-            <input name="daily_rate" type="number" min="1" value="{{ c.daily_rate|int }}" style="width:100px">
-            <input name="late_fee" type="number" min="0" value="{{ c.late_fee_per_hr|int }}" style="width:80px">
-            <button class="btn sm sec">Save</button></form></td></tr>
-    {% endfor %}
-  </table>
+  </section>
 </div>
 {% endblock %}

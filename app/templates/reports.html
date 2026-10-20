@@ -1,73 +1,85 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Reports{% endblock %}
 {% block content %}
-<div class="head">
-  <div><h1>Management reports</h1><div class="sub">FR-11 · every report is a result set returned by a report_* procedure</div></div>
+{% call ui.header('FR-11 · Management reports', 'Reports', 'Each report is a result set returned by a report_* procedure.') %}
   <form class="filters" method="get">
-    <div style="min-width:110px"><label>Revenue months</label><input type="number" name="months" min="1" max="24" value="{{ months }}"></div>
-    <div style="min-width:110px"><label>Utilisation days</label><input type="number" name="days" min="1" max="365" value="{{ days }}"></div>
-    <button class="btn sec">Apply</button>
+    <div style="min-width:120px"><label>Revenue months</label><input type="number" name="months" min="1" max="24" value="{{ months }}"></div>
+    <div style="min-width:120px"><label>Utilisation days</label><input type="number" name="days" min="1" max="365" value="{{ days }}"></div>
+    <button class="btn dark">Apply</button>
   </form>
-</div>
+{% endcall %}
 
-<div class="panel table-wrap">
-  <h2>Monthly revenue per branch <span class="dbcall">report_branch_revenue({{ months }})</span></h2>
-  <table>
-    <tr><th>Branch</th>{% for m in month_list %}<th class="num">{{ m }}</th>{% endfor %}<th class="num">Total</th></tr>
+<section class="card flush">
+  <div class="card-head" style="padding:18px 20px 0"><h2>Revenue by branch</h2>{{ ui.sql('report_branch_revenue(' ~ months ~ ')') }}</div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Branch</th>{% for m in month_list %}<th class="num">{{ m }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+    <tbody>
     {% for branch, vals in pivot | dictsort %}
-    <tr><td>{{ branch }}</td>
-      {% for m in month_list %}<td class="num">{{ vals.get(m) | money if vals.get(m) is not none else '–' }}</td>{% endfor %}
-      <td class="num"><b>{{ vals.values() | sum | money }}</b></td></tr>
+    <tr><td class="strong">{{ branch }}</td>
+      {% for m in month_list %}<td class="num {{ 'muted' if vals.get(m) is none }}">{{ vals.get(m) | money if vals.get(m) is not none else '–' }}</td>{% endfor %}
+      <td class="num strong">{{ vals.values() | sum | money }}</td></tr>
     {% endfor %}
-  </table>
-</div>
+    </tbody>
+  </table></div>
+</section>
 
-<div class="panel table-wrap">
-  <h2>Branch summary <span class="dbcall">report_branch_summary (nested explicit cursors)</span></h2>
-  <table>
-    <tr><th>Branch</th><th>Fleet by status</th><th class="num">Revenue (all time)</th></tr>
+<div class="grid g2 mt">
+  <section class="card">
+    <div class="card-head"><h2>Branch summary</h2>{{ ui.sql('report_branch_summary') }}</div>
+    <p class="hint" style="margin-top:-6px">Built with nested explicit cursors: branches, then vehicles by status.</p>
+    <div class="stack">
+    {% set top_rev = summary | map(attribute='revenue') | max %}
     {% for s in summary %}
-    <tr><td>{{ s.branch }}</td><td class="mono small">{{ s.fleet or '–' }}</td><td class="num">{{ s.revenue | money }}</td></tr>
+      <div>
+        <div style="display:flex;justify-content:space-between;gap:10px"><span class="strong">{{ s.branch }}</span><span class="strong">{{ s.revenue | money }}</span></div>
+        <div class="bar-line {{ 'top' if s.revenue == top_rev }}"><span style="--w: {{ (100 * s.revenue / top_rev) | round(1) if top_rev else 0 }}%"></span></div>
+        <div class="small muted mono">{{ s.fleet or 'no vehicles' }}</div>
+      </div>
     {% endfor %}
-  </table>
-</div>
+    </div>
+  </section>
 
-<div class="grid g2">
-  <div class="panel table-wrap">
-    <h2>Top customers <span class="dbcall">report_top_customers(5)</span></h2>
-    <table>
-      <tr><th>Customer</th><th>Phone</th><th class="num">Rentals</th><th class="num">Total spent</th></tr>
+  <section class="card">
+    <div class="card-head"><h2>Top customers <small>ranked by trips</small></h2>{{ ui.sql('report_top_customers(5)') }}</div>
+    <ol class="podium">
       {% for t in top %}
-      <tr><td><a href="{{ url_for('customer_detail', customer_id=t.customer_id) }}">{{ t.name }}</a></td><td>{{ t.phone }}</td>
-          <td class="num">{{ t.rentals }}</td><td class="num">{{ t.total_spent | money }}</td></tr>
+      <li><span class="pos">{{ loop.index }}</span>
+        <div><a class="strong" href="{{ url_for('customer_detail', customer_id=t.customer_id) }}">{{ t.name }}</a><div class="small muted">{{ t.phone }} · {{ t.rentals }} trips</div></div>
+        <span class="price" style="font-size:20px">{{ t.total_spent | money }}</span></li>
       {% endfor %}
-    </table>
-  </div>
-  <div class="panel table-wrap">
-    <h2>Pending dues <span class="dbcall">report_pending_dues</span></h2>
-    <table>
-      <tr><th>Booking</th><th>Customer</th><th>Status</th><th class="num">Charge</th><th class="num">Paid</th><th class="num">Balance</th></tr>
-      {% for d in dues %}
-      <tr><td><a href="{{ url_for('booking_detail', booking_id=d.booking_id) }}">#{{ d.booking_id }}</a></td>
-          <td>{{ d.customer }}<div class="small muted">{{ d.phone }}</div></td>
-          <td><span class="badge b-{{ d.status }}">{{ d.status }}</span></td>
-          <td class="num">{{ d.total_charge | money }}</td><td class="num">{{ d.paid | money }}</td>
-          <td class="num"><b>{{ d.balance | money }}</b></td></tr>
-      {% endfor %}
-    </table>
-  </div>
+    </ol>
+  </section>
 </div>
 
-<div class="panel table-wrap">
-  <h2>Fleet utilisation, last {{ days }} days <span class="dbcall">report_fleet_utilisation({{ days }})</span></h2>
-  <table>
-    <tr><th>Vehicle</th><th>Reg. no.</th><th>Category</th><th>Branch</th><th>Status</th><th class="num">Days rented</th><th style="width:28%">Utilisation</th></tr>
-    {% for u in utilisation %}
-    <tr><td>{{ u.vehicle }}</td><td class="mono">{{ u.reg_number }}</td><td>{{ u.category_name }}</td><td>{{ u.branch_name }}</td>
-        <td><span class="badge b-{{ u.status }}">{{ u.status }}</span></td><td class="num">{{ u.days_rented }}</td>
-        <td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><span style="width:{{ [u.utilisation_pct, 100] | min }}%"></span></div>
-            <span class="small" style="width:44px;text-align:right">{{ u.utilisation_pct }}%</span></div></td></tr>
+<section class="card flush mt">
+  <div class="card-head" style="padding:18px 20px 0"><h2>Pending dues</h2>{{ ui.sql('report_pending_dues') }}</div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Booking</th><th>Customer</th><th>Vehicle</th><th>Status</th><th class="num">Charge</th><th class="num">Paid</th><th class="num">Balance</th></tr></thead>
+    <tbody>
+    {% for d in dues %}
+    <tr><td><a class="idlink" href="{{ url_for('booking_detail', booking_id=d.booking_id) }}">#{{ d.booking_id }}</a></td>
+        <td>{{ d.customer }}<div class="small muted">{{ d.phone }}</div></td>
+        <td>{{ ui.plate(d.reg_number) }}</td>
+        <td>{{ ui.status(d.status) }}</td>
+        <td class="num">{{ d.total_charge | money }}</td><td class="num">{{ d.paid | money }}</td>
+        <td class="num strong {{ 'neg' if d.status == 'COMPLETED' }}">{{ d.balance | money }}</td></tr>
     {% endfor %}
-  </table>
-</div>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card flush mt">
+  <div class="card-head" style="padding:18px 20px 0"><h2>Fleet utilisation · last {{ days }} days</h2>{{ ui.sql('report_fleet_utilisation(' ~ days ~ ')') }}</div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Vehicle</th><th>Plate</th><th>Category</th><th>Branch</th><th>Status</th><th class="num">Days rented</th><th>Fuel gauge</th></tr></thead>
+    <tbody>
+    {% for u in utilisation %}
+    <tr><td class="strong">{{ u.vehicle }}</td><td>{{ ui.plate(u.reg_number) }}</td><td class="small">{{ u.category_name }}</td>
+        <td class="small">{{ u.branch_name }}</td><td>{{ ui.status(u.status) }}</td>
+        <td class="num">{{ u.days_rented }}</td><td>{{ ui.fuel(u.utilisation_pct) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
 {% endblock %}
