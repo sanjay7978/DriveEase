@@ -25,8 +25,7 @@ DriveEase/
 ├── setup_database.py           builds / resets the whole database from sql/
 ├── app/                        Flask website (app.py, db.py, templates/, static/)
 ├── screenshots/                22 output screenshots + test_output.txt
-├── .vscode/                    Run configurations + recommended extensions
-└── _oracle_version/            the earlier Oracle version (backup only, not used)
+└── .vscode/                    Run configurations + recommended extensions
 ```
 
 ## 2. Open the project in VS Code
