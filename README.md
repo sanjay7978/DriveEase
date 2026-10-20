@@ -1,7 +1,6 @@
 # DriveEase – Vehicle Rental Management System
 
-**Course:** BCSE302L Database Systems – Review II (implementation)
-**Team:** R. Sanjay, Moningi Nidhi
+**Course:** BCSE302L Database Systems
 **Database:** MySQL 8 (installed with Homebrew), database `driveease`
 **Editor:** Visual Studio Code
 **Front-end:** Python Flask web app connected to MySQL with PyMySQL
