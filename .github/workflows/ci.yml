@@ -1,0 +1,33 @@
+name: Database tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Start MySQL 8
+        run: |
+          sudo systemctl start mysql
+          mysql --version
+
+      - name: Install Python packages
+        run: pip install -r app/requirements.txt
+
+      - name: Build the database and run the 28 test cases
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        run: python setup_database.py --tests
+
+      - name: Open every page of the website
+        run: python tests/smoke_test.py

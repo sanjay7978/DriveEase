@@ -6,3 +6,7 @@ __pycache__/
 # macOS / editors
 .DS_Store
 .claude/
+
+# Report deliverable (kept out of the repo)
+report/*.docx
+~$*
