@@ -84,8 +84,12 @@ def main():
 
         if "--tests" in sys.argv:
             cur.execute("CALL run_all_tests()")
-            for tc, result, area, test, actual in cur.fetchall():
+            rows = cur.fetchall()
+            for tc, result, area, test, actual in rows:
                 print(f"{tc:5} | {result} | {area:9} | {test} | {actual}")
+            if any(result != "PASS" for _, result, *_ in rows):
+                conn.close()
+                sys.exit("Some test cases failed.")
     conn.close()
     print("Done.")
 
