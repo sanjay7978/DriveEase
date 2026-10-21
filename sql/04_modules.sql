@@ -12,10 +12,11 @@
 -- rental_print_customer_history, fleet_auto_schedule_service and
 -- report_branch_summary.
 --
--- Transactions: multi-step procedures are atomic. If the caller has
--- autocommit ON (e.g. a VS Code query tab) the procedure runs and
--- commits its own transaction; if the caller already has a transaction
--- open (web app, test suite) it works inside it using a SAVEPOINT.
+-- Transactions: multi-step procedures are atomic. If the caller has no
+-- transaction open (e.g. a VS Code query tab with autocommit ON) the
+-- procedure starts and commits its own; if the caller already has one
+-- open (START TRANSACTION, the web app, the test suite) it works inside
+-- it using a SAVEPOINT and leaves the COMMIT / ROLLBACK to the caller.
 -- =====================================================================
 USE driveease;
 
@@ -141,12 +142,19 @@ BEGIN
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
     GET DIAGNOSTICS CONDITION 1 v_errno = MYSQL_ERRNO, v_text = MESSAGE_TEXT;
-    IF v_own THEN ROLLBACK; SET autocommit = 1; ELSE ROLLBACK TO SAVEPOINT sp_create_booking; END IF;
+    IF v_own THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT sp_create_booking; END IF;
     SET v_text = LEFT(v_text, 128);
     SIGNAL SQLSTATE '45000' SET MYSQL_ERRNO = v_errno, MESSAGE_TEXT = v_text;
   END;
 
-  IF @@autocommit = 1 THEN SET autocommit = 0; SET v_own = TRUE; END IF;
+  -- Does the caller already have a transaction open? A savepoint only survives
+  -- inside one, so ROLLBACK TO fails (error 1305) when there is none.
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR 1305 SET v_own = TRUE;
+    SAVEPOINT sp_create_booking;
+    ROLLBACK TO SAVEPOINT sp_create_booking;
+  END;
+  IF v_own THEN START TRANSACTION; END IF;        -- run as our own transaction
   SAVEPOINT sp_create_booking;
 
   IF p_start < NOW() - INTERVAL 1 HOUR THEN
@@ -178,7 +186,7 @@ BEGIN
     CALL rental_add_payment(p_booking_id, p_advance, COALESCE(p_method, 'CASH'), 'ADVANCE', v_pay_id);
   END IF;
 
-  IF v_own THEN COMMIT; SET autocommit = 1; END IF;
+  IF v_own THEN COMMIT; END IF;
 END$$
 
 -- FR-05 : pickup - booking ONGOING, vehicle RENTED
@@ -197,12 +205,19 @@ BEGIN
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
     GET DIAGNOSTICS CONDITION 1 v_errno = MYSQL_ERRNO, v_text = MESSAGE_TEXT;
-    IF v_own THEN ROLLBACK; SET autocommit = 1; ELSE ROLLBACK TO SAVEPOINT sp_record_pickup; END IF;
+    IF v_own THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT sp_record_pickup; END IF;
     SET v_text = LEFT(v_text, 128);
     SIGNAL SQLSTATE '45000' SET MYSQL_ERRNO = v_errno, MESSAGE_TEXT = v_text;
   END;
 
-  IF @@autocommit = 1 THEN SET autocommit = 0; SET v_own = TRUE; END IF;
+  -- Does the caller already have a transaction open? A savepoint only survives
+  -- inside one, so ROLLBACK TO fails (error 1305) when there is none.
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR 1305 SET v_own = TRUE;
+    SAVEPOINT sp_record_pickup;
+    ROLLBACK TO SAVEPOINT sp_record_pickup;
+  END;
+  IF v_own THEN START TRANSACTION; END IF;        -- run as our own transaction
   SAVEPOINT sp_record_pickup;
 
   SELECT status, start_date, vehicle_id INTO v_bstatus, v_start, v_vehicle
@@ -231,7 +246,7 @@ BEGIN
   UPDATE booking SET status = 'ONGOING', start_odometer = p_start_odometer WHERE booking_id = p_booking_id;
   UPDATE vehicle SET status = 'RENTED', odometer = p_start_odometer WHERE vehicle_id = v_vehicle;
 
-  IF v_own THEN COMMIT; SET autocommit = 1; END IF;
+  IF v_own THEN COMMIT; END IF;
 END$$
 
 -- FR-06 : return - rent + late fee (BR-04, BR-05), one-way transfer (BR-07),
@@ -258,12 +273,19 @@ BEGIN
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
     GET DIAGNOSTICS CONDITION 1 v_errno = MYSQL_ERRNO, v_text = MESSAGE_TEXT;
-    IF v_own THEN ROLLBACK; SET autocommit = 1; ELSE ROLLBACK TO SAVEPOINT sp_record_return; END IF;
+    IF v_own THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT sp_record_return; END IF;
     SET v_text = LEFT(v_text, 128);
     SIGNAL SQLSTATE '45000' SET MYSQL_ERRNO = v_errno, MESSAGE_TEXT = v_text;
   END;
 
-  IF @@autocommit = 1 THEN SET autocommit = 0; SET v_own = TRUE; END IF;
+  -- Does the caller already have a transaction open? A savepoint only survives
+  -- inside one, so ROLLBACK TO fails (error 1305) when there is none.
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR 1305 SET v_own = TRUE;
+    SAVEPOINT sp_record_return;
+    ROLLBACK TO SAVEPOINT sp_record_return;
+  END;
+  IF v_own THEN START TRANSACTION; END IF;        -- run as our own transaction
   SAVEPOINT sp_record_return;
 
   SELECT status, vehicle_id, start_odometer, return_branch_id
@@ -307,7 +329,7 @@ BEGIN
     SET p_amount_due = fn_balance_due(p_booking_id);
   END IF;
 
-  IF v_own THEN COMMIT; SET autocommit = 1; END IF;
+  IF v_own THEN COMMIT; END IF;
 END$$
 
 -- FR-08 : cancel - BR-06: >= 24 h before pickup full refund, otherwise 50 %
@@ -326,12 +348,19 @@ BEGIN
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
     GET DIAGNOSTICS CONDITION 1 v_errno = MYSQL_ERRNO, v_text = MESSAGE_TEXT;
-    IF v_own THEN ROLLBACK; SET autocommit = 1; ELSE ROLLBACK TO SAVEPOINT sp_cancel_booking; END IF;
+    IF v_own THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT sp_cancel_booking; END IF;
     SET v_text = LEFT(v_text, 128);
     SIGNAL SQLSTATE '45000' SET MYSQL_ERRNO = v_errno, MESSAGE_TEXT = v_text;
   END;
 
-  IF @@autocommit = 1 THEN SET autocommit = 0; SET v_own = TRUE; END IF;
+  -- Does the caller already have a transaction open? A savepoint only survives
+  -- inside one, so ROLLBACK TO fails (error 1305) when there is none.
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR 1305 SET v_own = TRUE;
+    SAVEPOINT sp_cancel_booking;
+    ROLLBACK TO SAVEPOINT sp_cancel_booking;
+  END;
+  IF v_own THEN START TRANSACTION; END IF;        -- run as our own transaction
   SAVEPOINT sp_cancel_booking;
 
   SELECT status, start_date INTO v_bstatus, v_start FROM booking WHERE booking_id = p_booking_id FOR UPDATE;
@@ -358,7 +387,7 @@ BEGIN
     CALL rental_add_payment(p_booking_id, p_refund, v_method, 'REFUND', v_pay_id);
   END IF;
 
-  IF v_own THEN COMMIT; SET autocommit = 1; END IF;
+  IF v_own THEN COMMIT; END IF;
 END$$
 
 -- FR-12 : customer history (result set)
@@ -514,12 +543,19 @@ BEGIN
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
     GET DIAGNOSTICS CONDITION 1 v_errno = MYSQL_ERRNO, v_text = MESSAGE_TEXT;
-    IF v_own THEN ROLLBACK; SET autocommit = 1; ELSE ROLLBACK TO SAVEPOINT sp_auto_service; END IF;
+    IF v_own THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT sp_auto_service; END IF;
     SET v_text = LEFT(v_text, 128);
     SIGNAL SQLSTATE '45000' SET MYSQL_ERRNO = v_errno, MESSAGE_TEXT = v_text;
   END;
 
-  IF @@autocommit = 1 THEN SET autocommit = 0; SET v_own = TRUE; END IF;
+  -- Does the caller already have a transaction open? A savepoint only survives
+  -- inside one, so ROLLBACK TO fails (error 1305) when there is none.
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR 1305 SET v_own = TRUE;
+    SAVEPOINT sp_auto_service;
+    ROLLBACK TO SAVEPOINT sp_auto_service;
+  END;
+  IF v_own THEN START TRANSACTION; END IF;        -- run as our own transaction
   SAVEPOINT sp_auto_service;
   SET p_jobs_created = 0;
 
@@ -538,7 +574,7 @@ BEGIN
   END LOOP;
   CLOSE c_due;
 
-  IF v_own THEN COMMIT; SET autocommit = 1; END IF;
+  IF v_own THEN COMMIT; END IF;
 END$$
 
 -- =====================================================================
